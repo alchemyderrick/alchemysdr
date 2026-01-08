@@ -1,0 +1,2856 @@
+import "dotenv/config";
+import express from "express";
+import Database from "better-sqlite3";
+import Anthropic from "@anthropic-ai/sdk";
+import { nanoid } from "nanoid";
+import { execFile, execFileSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { WorkflowEngine } from "./lib/workflow-engine.js";
+import { createWorkflowRoutes } from "./routes/workflow.js";
+import { createTargetRoutes } from "./routes/targets.js";
+
+const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(process.cwd())); // Add this line
+
+
+
+const db = new Database("data.db");
+db.pragma("journal_mode = WAL");
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS contacts (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  company TEXT,
+  title TEXT,
+  telegram_handle TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS drafts (
+  id TEXT PRIMARY KEY,
+  contact_id TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  message_text TEXT NOT NULL,
+  status TEXT NOT NULL,
+  prepared_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (contact_id) REFERENCES contacts(id)
+);
+
+CREATE TABLE IF NOT EXISTS targets (
+  id TEXT PRIMARY KEY,
+  team_name TEXT NOT NULL,
+  raised_usd INTEGER NOT NULL,
+  monthly_revenue_usd INTEGER NOT NULL,
+  is_web3 INTEGER NOT NULL DEFAULT 1,
+  x_handle TEXT,
+  website TEXT,
+  notes TEXT,
+  sources_json TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_targets_status ON targets(status);
+CREATE INDEX IF NOT EXISTS idx_targets_money ON targets(raised_usd, monthly_revenue_usd);
+`);
+
+// Migration: Add x_handle column to existing targets table if it doesn't exist
+try {
+  const columns = db.pragma("table_info(targets)");
+  const hasXHandle = columns.some(col => col.name === "x_handle");
+  const hasWebsite = columns.some(col => col.name === "website");
+  
+  if (!hasXHandle) {
+    console.log("📝 Adding x_handle column to targets table...");
+    db.exec("ALTER TABLE targets ADD COLUMN x_handle TEXT");
+    console.log("✅ x_handle column added");
+  }
+  
+  if (!hasWebsite) {
+    console.log("📝 Adding website column to targets table...");
+    db.exec("ALTER TABLE targets ADD COLUMN website TEXT");
+    console.log("✅ website column added");
+  }
+  
+  if (hasXHandle && hasWebsite) {
+    console.log("✅ Database schema up to date");
+  }
+} catch (e) {
+  console.error("Migration error (this is usually safe to ignore):", e.message);
+}
+
+// Migration: Add X discovery columns to contacts table
+try {
+  const contactColumns = db.pragma("table_info(contacts)");
+  const hasXUsername = contactColumns.some(col => col.name === "x_username");
+  const hasXBio = contactColumns.some(col => col.name === "x_bio");
+  const hasSource = contactColumns.some(col => col.name === "source");
+  const hasTelegramValidated = contactColumns.some(col => col.name === "telegram_validated");
+  const hasTelegramValidationDate = contactColumns.some(col => col.name === "telegram_validation_date");
+
+  if (!hasXUsername) {
+    console.log("📝 Adding x_username column to contacts table...");
+    db.exec("ALTER TABLE contacts ADD COLUMN x_username TEXT");
+    console.log("✅ x_username column added");
+  }
+
+  if (!hasXBio) {
+    console.log("📝 Adding x_bio column to contacts table...");
+    db.exec("ALTER TABLE contacts ADD COLUMN x_bio TEXT");
+    console.log("✅ x_bio column added");
+  }
+
+  if (!hasSource) {
+    console.log("📝 Adding source column to contacts table...");
+    db.exec("ALTER TABLE contacts ADD COLUMN source TEXT DEFAULT 'manual'");
+    console.log("✅ source column added");
+  }
+
+  if (!hasTelegramValidated) {
+    console.log("📝 Adding telegram_validated column to contacts table...");
+    db.exec("ALTER TABLE contacts ADD COLUMN telegram_validated INTEGER DEFAULT 0");
+    console.log("✅ telegram_validated column added");
+  }
+
+  if (!hasTelegramValidationDate) {
+    console.log("📝 Adding telegram_validation_date column to contacts table...");
+    db.exec("ALTER TABLE contacts ADD COLUMN telegram_validation_date TEXT");
+    console.log("✅ telegram_validation_date column added");
+  }
+
+  if (hasXUsername && hasXBio && hasSource && hasTelegramValidated && hasTelegramValidationDate) {
+    console.log("✅ Contacts table schema up to date for X discovery");
+  }
+} catch (e) {
+  console.error("X discovery migration error (this is usually safe to ignore):", e.message);
+}
+
+// Migration: Create discovered_contacts table for "All Contacts" feature
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS discovered_contacts (
+      id TEXT PRIMARY KEY,
+      target_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      title TEXT,
+      email TEXT,
+      phone TEXT,
+      linkedin TEXT,
+      telegram_handle TEXT,
+      source TEXT DEFAULT 'web_search',
+      discovered_at TEXT NOT NULL,
+      FOREIGN KEY(target_id) REFERENCES targets(id)
+    )
+  `);
+  console.log("✅ Discovered contacts table ready");
+} catch (e) {
+  console.error("Discovered contacts table error:", e.message);
+}
+
+function nowISO() {
+  return new Date().toISOString();
+}
+
+function tgLinks(handleRaw) {
+  const handle = (handleRaw || "").replace("@", "").trim();
+  if (!handle) return { web: null, desktop: null };
+  return {
+    web: `https://t.me/${handle}`,
+    desktop: `tg://resolve?domain=${handle}`,
+  };
+}
+
+function xLink(handleRaw) {
+  const handle = (handleRaw || "").replace("@", "").trim();
+  if (!handle) return null;
+  return `https://x.com/${handle}`;
+}
+
+function qualifiesTarget(t) {
+  const raised = Number(t?.raised_usd);
+  const rev = Number(t?.monthly_revenue_usd);
+  const isWeb3 = t?.is_web3 === 1 || t?.is_web3 === true || t?.is_web3 === "1" || t?.is_web3 === "true";
+  return Number.isFinite(raised) && Number.isFinite(rev) && raised >= 10_000_000 && rev >= 1_000_000 && isWeb3;
+}
+
+function setClipboardMac(text) {
+  execFileSync("pbcopy", { input: String(text ?? "") });
+}
+
+function openTelegramDesktopLink(handleRaw) {
+  const { desktop } = tgLinks(handleRaw);
+  if (!desktop) return;
+  execFile("open", [desktop], (err) => {
+    if (err) console.error("open tg link error:", err);
+  });
+}
+
+function runAppleScriptLines(lines) {
+  return new Promise((resolve, reject) => {
+    const args = [];
+    for (const line of lines) args.push("-e", line);
+    execFile("osascript", args, (err, stdout, stderr) => {
+      if (err) {
+        err.stdout = stdout;
+        err.stderr = stderr;
+        return reject(err);
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
+const AUTO_SEND_IDLE_SECONDS = Number(process.env.AUTO_SEND_IDLE_SECONDS || 5);
+const AUTO_SEND_ENABLED = String(process.env.AUTO_SEND_ENABLED || "true").toLowerCase() !== "false";
+const pendingAutoSends = new Map();
+
+function scheduleTelegramAutoSend(draftId) {
+  if (!AUTO_SEND_ENABLED) return;
+  if (!Number.isFinite(AUTO_SEND_IDLE_SECONDS) || AUTO_SEND_IDLE_SECONDS <= 0) return;
+  const existing = pendingAutoSends.get(draftId);
+  if (existing) clearTimeout(existing);
+  const t = setTimeout(async () => {
+    try {
+      await pressEnterToSendInTelegram();
+    } catch (e) {
+      console.error("auto-send error:", e?.message || e, e?.stderr || "");
+    } finally {
+      pendingAutoSends.delete(draftId);
+    }
+  }, AUTO_SEND_IDLE_SECONDS * 1000);
+  pendingAutoSends.set(draftId, t);
+}
+
+function cancelTelegramAutoSend(draftId) {
+  const existing = pendingAutoSends.get(draftId);
+  if (existing) clearTimeout(existing);
+  pendingAutoSends.delete(draftId);
+}
+
+async function activateTelegram() {
+  const lines = [
+    'tell application "Telegram" to activate',
+    'delay 0.6',
+    'tell application "System Events" to tell process "Telegram" to set frontmost to true',
+    'delay 0.2'
+  ];
+  await runAppleScriptLines(lines);
+}
+
+async function pasteIntoTelegram() {
+  await activateTelegram();
+  const lines = ['tell application "System Events" to keystroke "v" using command down'];
+  await runAppleScriptLines(lines);
+}
+
+async function pressEnterToSendInTelegram() {
+  await activateTelegram();
+  const lines = ['tell application "System Events" to key code 36'];
+  await runAppleScriptLines(lines);
+}
+
+const SDR_STYLE_FILE = path.join(process.cwd(), "Successful SDR Messaging.txt");
+let SDR_STYLE_EXAMPLES = "";
+try {
+  SDR_STYLE_EXAMPLES = fs.readFileSync(SDR_STYLE_FILE, "utf8");
+  console.log("📘 Loaded SDR style examples");
+} catch (e) {
+  console.warn("⚠️ Could not load SDR style examples:", e.message);
+}
+
+const ALCHEMY_PRODUCT_FILE = path.join(process.cwd(), "Alchemy_Product_Info.txt");
+let ALCHEMY_PRODUCT_INFO = "";
+try {
+  ALCHEMY_PRODUCT_INFO = fs.readFileSync(ALCHEMY_PRODUCT_FILE, "utf8");
+  console.log("📘 Loaded Alchemy product information");
+} catch (e) {
+  console.warn("⚠️ Could not load Alchemy product info:", e.message);
+}
+
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error("❌ Missing ANTHROPIC_API_KEY");
+  process.exit(1);
+}
+const ALCHEMY_DATA_FILE = path.join(process.cwd(), "alchemy_data.md");
+let ALCHEMY_DATA_INFO = "";
+try {
+  ALCHEMY_DATA_INFO = fs.readFileSync(ALCHEMY_DATA_FILE, "utf8");
+  console.log("📘 Loaded Alchemy Data documentation");
+} catch (e) {
+  console.warn("⚠️ Could not load Alchemy Data docs:", e.message);
+}
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const CLAUDE_MODEL = "claude-3-haiku-20240307";
+
+const OUTBOUND_SYSTEM = `You are an Alchemy SDR writing a first Telegram DM.
+
+Below are REAL successful outbound messages previously sent.
+Use them as inspiration for tone, phrasing, structure, and technical depth.
+Do not copy them verbatim — follow their patterns.
+
+--- BEGIN SUCCESSFUL SDR MESSAGE EXAMPLES ---
+${SDR_STYLE_EXAMPLES}
+--- END SUCCESSFUL SDR MESSAGE EXAMPLES ---
+
+--- BEGIN ALCHEMY PRODUCT INFORMATION ---
+${ALCHEMY_PRODUCT_INFO}
+--- END ALCHEMY PRODUCT INFORMATION ---
+
+--- BEGIN ALCHEMY DATA API DOCUMENTATION ---
+${global.ALCHEMY_DATA_INFO || ''}
+--- END ALCHEMY DATA API DOCUMENTATION ---
+
+--- BEGIN ALCHEMY NODE API DOCUMENTATION ---
+${global.ALCHEMY_NODE_INFO || ''}
+--- END ALCHEMY NODE API DOCUMENTATION ---
+
+You have access to comprehensive Alchemy documentation above including:
+- Data API: For querying blockchain data, transactions, NFTs, tokens, etc.
+- Node API: For blockchain node services, enhanced APIs, webhooks, etc.
+
+You have access to comprehensive Alchemy product information and Data API documentation above. 
+Use this knowledge to:
+- Reference specific Alchemy products/features when relevant to the prospect's needs
+- Mention Data API capabilities if the prospect works with blockchain data
+- Show technical understanding of their challenges and how Alchemy solves them
+
+Constraints:
+- The FIRST line must be exactly: "Hey {Name}, congrats on the success over at {Company}!"
+- 1–3 short lines total.
+- Mention ONE specific reason to reach out (use Notes).
+- Ask EXACTLY one question.
+- No links.
+- No pricing/credits/security commitments.
+
+Tone: human, brief, crypto-native.`;
+
+const FOLLOWUP_SYSTEM = `You are an Alchemy SDR writing a follow-up Telegram message.
+
+Below are REAL successful outbound messages previously sent (including follow-ups).
+Use them as inspiration for tone, phrasing, and approach.
+
+--- BEGIN SUCCESSFUL SDR MESSAGE EXAMPLES ---
+${SDR_STYLE_EXAMPLES}
+--- END SUCCESSFUL SDR MESSAGE EXAMPLES ---
+
+--- BEGIN ALCHEMY PRODUCT INFORMATION ---
+${ALCHEMY_PRODUCT_INFO}
+--- END ALCHEMY PRODUCT INFORMATION ---
+
+--- BEGIN ALCHEMY DATA API DOCUMENTATION ---
+${global.ALCHEMY_DATA_INFO || ''}
+--- END ALCHEMY DATA API DOCUMENTATION ---
+
+--- BEGIN ALCHEMY NODE API DOCUMENTATION ---
+${global.ALCHEMY_NODE_INFO || ''}
+--- END ALCHEMY NODE API DOCUMENTATION ---
+
+You have access to comprehensive Alchemy documentation above including:
+- Data API: For querying blockchain data, transactions, NFTs, tokens, etc.
+- Node API: For blockchain node services, enhanced APIs, webhooks, etc.
+
+You have access to comprehensive Alchemy product information and Data API documentation above.
+Use this knowledge if relevant to provide value in the follow-up.
+
+Follow-up Constraints:
+- Keep it VERY brief - 1-2 short lines maximum
+- Be friendly and non-pushy
+- Reference the original message context naturally
+- Provide value or ask a gentle question
+- Examples: "Just checking in - any thoughts?", "Curious if you had a chance to think about this?", "Would love to hear your perspective when you have a sec"
+
+Tone: casual, friendly, respectful of their time.`;
+
+// Find the generateOutbound function (around line 290) and REPLACE it entirely with this:
+
+async function generateOutbound(contact) {
+  console.log(`🔧 generateOutbound called for ${contact.name}`);
+  console.log(`   Notes: "${contact.notes}"`);
+  
+  // Check if notes end with a question mark
+  const hasQuestion = contact.notes && contact.notes.trim().endsWith('?');
+  console.log(`   Has question: ${hasQuestion}`);
+  
+  if (hasQuestion) {
+    console.log(`📝 Question detected: "${contact.notes}"`);
+    
+    // Use Claude to answer the question directly using the documentation
+    console.log(`🤖 Asking Claude to answer question with documentation`);
+    
+    const userPrompt = `You are an Alchemy SDR writing a cold outreach message to answer this specific question from a prospect:
+
+QUESTION: "${contact.notes}"
+
+Contact: ${contact.name} at ${contact.company}
+
+CRITICAL INSTRUCTIONS:
+1. Line 1 MUST be: "Hey ${contact.name}, congrats on the success over at ${contact.company}!"
+2. Line 2 MUST directly answer their question using the Alchemy documentation in your system prompt
+   - Start with "Yes" or a direct answer
+   - Include specific details (numbers, chain names, features, etc.)
+   - Be technically accurate using the docs
+3. Line 3 MUST be a simple call-to-action question
+
+DO NOT write generic phrases like:
+- "I noticed you might be interested"
+- "Would you be open to learning more"
+- "I wanted to reach out about"
+
+ANSWER THE QUESTION DIRECTLY with specific information from the documentation.
+
+Example for "What chains does the node API support?":
+Hey ${contact.name}, congrats on the success over at ${contact.company}!
+
+Alchemy's Node API supports 80+ chains including Ethereum, Polygon, Arbitrum, Optimism, Base, Solana, and all major L1s/L2s - all accessible through one integration.
+
+Want to chat about your multi-chain infrastructure needs?`;
+
+    const msg = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 400,
+      system: OUTBOUND_SYSTEM,
+      messages: [{ role: "user", content: userPrompt }],
+    });
+
+    let text = msg?.content?.map((c) => (c.type === "text" ? c.text : "")).join("").trim();
+    console.log(`📤 Claude response: ${text}`);
+    
+    // Check if Claude is still being vague
+    const vaguePatterns = [
+      "interested in learning",
+      "I noticed",
+      "might be interested",
+      "wanted to reach out",
+      "exploring ways",
+      "curious if you",
+      "open to discussing"
+    ];
+    
+    const isVague = vaguePatterns.some(pattern => text.toLowerCase().includes(pattern));
+    
+    if (isVague) {
+      console.warn(`⚠️ Claude response is vague, regenerating with stronger prompt`);
+      
+      // Try one more time with an even more explicit prompt
+      const forcedPrompt = `Answer this question in a cold outreach message: "${contact.notes}"
+
+Format:
+Line 1: Hey ${contact.name}, congrats on the success over at ${contact.company}!
+Line 2: [Direct answer with specific facts from Alchemy documentation - start with "Yes" or the answer]
+Line 3: [One question as CTA]
+
+Use the Alchemy Data API and Node API documentation in your system to provide accurate details.`;
+
+      const msg2 = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 400,
+        system: OUTBOUND_SYSTEM,
+        messages: [{ role: "user", content: forcedPrompt }],
+      });
+
+      text = msg2?.content?.map((c) => (c.type === "text" ? c.text : "")).join("").trim();
+      console.log(`📤 Second attempt: ${text}`);
+    }
+    
+    return text;
+  }
+  
+  // Regular outreach (no question)
+  console.log(`📧 Generating regular outreach (no question)`);
+  const userPrompt = `Contact:
+Name: ${contact.name}
+Company: ${contact.company || "Unknown"}
+Title: ${contact.title || "Unknown"}
+Telegram: ${contact.telegram_handle || "Unknown"}
+Notes (signals/angle): ${contact.notes || ""}
+
+Write the first outbound Telegram DM using the Alchemy product information and documentation.`;
+
+  const msg = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 400,
+    system: OUTBOUND_SYSTEM,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+
+  const text = msg?.content?.map((c) => (c.type === "text" ? c.text : "")).join("").trim();
+  return text || "Quick question—are you open to chatting this week?";
+}
+
+async function generateFollowUp(contactName, company, originalMessage) {
+  const userPrompt = `Contact: ${contactName} at ${company}
+
+Original message sent:
+"${originalMessage}"
+
+They haven't responded yet. Write a brief, friendly follow-up message.`;
+
+  const msg = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 150,
+    system: FOLLOWUP_SYSTEM,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+
+  const text = msg?.content?.map((c) => (c.type === "text" ? c.text : "")).join("").trim();
+  return text || "Just wanted to follow up - any thoughts?";
+}
+
+app.get("/", (req, res) => {
+  res.setHeader("Content-Type", "text/html");
+  res.send(`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SDR Agent Console</title>
+<style>
+body{font-family:-apple-system,system-ui,sans-serif;margin:24px;max-width:1400px}
+.row{display:flex;gap:10px;margin-bottom:8px}
+input,textarea{width:100%;padding:8px}
+textarea{height:90px}
+.card{border:1px solid #ddd;border-radius:10px;padding:12px;margin:12px 0}
+button{padding:8px 10px;cursor:pointer}
+.muted{color:#666;font-size:12px}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#f4f4f4;font-size:12px}
+.ok{color:#0a7f2e}
+.bad{color:#a60000}
+.layout{display:flex;gap:16px;align-items:flex-start}
+.left{flex:1 1 auto;min-width:560px}
+.right{flex:0 0 420px}
+@media(max-width:980px){
+.layout{flex-direction:column}
+.right{width:100%}
+.left{min-width:0}
+}
+.tiny{font-size:11px}
+.kv{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.money{font-variant-numeric:tabular-nums}
+.target-card{background:#f9f9f9;border:1px solid #e0e0e0;border-radius:8px;padding:10px;margin:8px 0}
+.target-header{font-weight:600;margin-bottom:6px}
+.x-link{color:#1d9bf0;text-decoration:none;font-size:12px;margin-right:8px}
+.x-link:hover{text-decoration:underline}
+.web-link{color:#059669;text-decoration:none;font-size:12px}
+.web-link:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+<img src="/alchemyinc_logo.jpeg" alt="Alchemy" style="width:32px;height:32px">
+<h2 style="margin:0">SDR Agent Console (Telegram)</h2>
+</div>
+<div class="layout">
+<div class="left">
+<div class="card">
+<h3>Add Contact</h3>
+<div class="row">
+<input id="name" placeholder="Name (required)">
+<input id="company" placeholder="Company (required)">
+<input id="tg" placeholder="Telegram handle (@username)">
+</div>
+<div class="row">
+<input id="notes" placeholder="Notes/angle (funding, hiring, chain, infra pain, etc.)">
+</div>
+<div class="row">
+<button onclick="addContact()">Add + Generate Draft</button>
+<button onclick="refreshQueue()">Refresh Queue</button>
+<button onclick="checkClaude()">Check Claude</button>
+</div>
+<div id="status" class="muted"></div>
+</div>
+<div class="card">
+<h3>Discover Users from X</h3>
+<div class="row">
+<input id="xCompanyHandle" placeholder="Company X handle (e.g., @alchemy)">
+<button onclick="discoverFromX()">Discover Users</button>
+</div>
+<div id="xDiscoveryStatus" class="muted"></div>
+</div>
+<div class="card">
+<h3>Send Queue</h3>
+<div id="queue" class="muted">Loading...</div>
+</div>
+<div class="card">
+<h3>Sent Messages</h3>
+<div class="muted tiny">Successfully sent outreach messages</div>
+<div id="sentMessages" class="muted" style="margin-top:8px">Loading...</div>
+</div>
+<div class="card">
+<h3>Follow-Ups</h3>
+<div class="muted tiny">Follow-up messages sent</div>
+<div id="followUpMessages" class="muted" style="margin-top:8px">Loading...</div>
+</div>
+</div>
+<div class="right">
+<div class="card">
+<h3>Top Target Teams</h3>
+<div class="muted tiny">Web3 teams with ≥ $10M raised OR ≥ $1M monthly revenue</div>
+<div class="row" style="margin-top:10px">
+<button onclick="refreshTargets()">Refresh</button>
+<button onclick="researchTeams()">Research Teams</button>
+<button onclick="openImporter()">Manual Import</button>
+</div>
+<div id="researchStatus" class="muted" style="margin-top:8px"></div>
+<div id="targets" class="muted">Loading...</div>
+</div>
+<div class="card">
+<h3>Approved Target Teams</h3>
+<div class="muted tiny">Teams you've approved for outreach</div>
+<div id="approvedTargets" class="muted">Loading...</div>
+</div>
+</div>
+</div>
+<script>
+function fmtMoney(n){
+const x=Number(n);
+if(!Number.isFinite(x))return"—";
+const abs=Math.abs(x);
+if(abs>=1e9)return"$"+(x/1e9).toFixed(1).replace(/\\.0$/,"")+"B";
+if(abs>=1e6)return"$"+(x/1e6).toFixed(1).replace(/\\.0$/,"")+"M";
+if(abs>=1e3)return"$"+Math.round(x/1e3)+"k";
+return"$"+Math.round(x);
+}
+function escapeHtml(s){
+return(s||"").replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+}
+async function refreshTargets(){
+try{
+const r=await fetch("/api/targets");
+const items=await r.json();
+const el=document.getElementById("targets");
+if(!el)return;
+el.innerHTML="";
+if(!items.length){
+el.innerHTML="<div class='muted'>No qualifying targets yet. Click Import to add teams.</div>";
+return;
+}
+for(const t of items){
+const card=document.createElement("div");
+card.className="target-card";
+const xLinkHtml=t.x_handle?("<a href='https://x.com/"+escapeHtml(t.x_handle.replace("@",""))+"' target='_blank' class='x-link'>@"+escapeHtml(t.x_handle.replace("@",""))+"</a>"):"";
+const webLinkHtml=t.website?("<a href='"+escapeHtml(t.website)+"' target='_blank' class='web-link'>🌐 website</a>"):"";
+const linksHtml=(xLinkHtml||webLinkHtml)?("<div style='margin-top:4px'>"+xLinkHtml+webLinkHtml+"</div>"):"";
+card.innerHTML="<div class='target-header'>"+escapeHtml(t.team_name)+"</div>"+
+linksHtml+
+"<div class='kv'>"+
+"<span class='pill money'>Raised: "+fmtMoney(t.raised_usd)+"</span>"+
+"<span class='pill money'>Rev: "+fmtMoney(t.monthly_revenue_usd)+"/mo</span>"+
+"</div>"+
+(t.notes?"<div class='muted tiny' style='margin-top:6px'>"+escapeHtml(t.notes)+"</div>":"");
+const actions=document.createElement("div");
+actions.style.marginTop="8px";
+const dismissBtn=document.createElement("button");
+dismissBtn.textContent="Dismiss";
+dismissBtn.style.fontSize="11px";
+dismissBtn.style.padding="4px 8px";
+dismissBtn.onclick=async()=>{
+await fetch("/api/targets/"+t.id+"/dismiss",{method:"POST"});
+await refreshTargets();
+await refreshApprovedTargets();
+};
+actions.appendChild(dismissBtn);
+if(!t.x_handle){
+const findXBtn=document.createElement("button");
+findXBtn.textContent="Find X";
+findXBtn.style.fontSize="11px";
+findXBtn.style.padding="4px 8px";
+findXBtn.style.marginLeft="8px";
+findXBtn.onclick=async()=>{
+findXBtn.textContent="Finding...";
+findXBtn.disabled=true;
+const r=await fetch("/api/targets/"+t.id+"/find-x-handle",{method:"POST"});
+const j=await r.json().catch(()=>({}));
+if(r.ok&&j.x_handle){
+await refreshTargets();
+}else{
+findXBtn.textContent="Not found";
+setTimeout(()=>{findXBtn.textContent="Find X";findXBtn.disabled=false},2000);
+}
+};
+actions.appendChild(findXBtn);
+}
+if(!t.website){
+const findWebBtn=document.createElement("button");
+findWebBtn.textContent="Find Website";
+findWebBtn.style.fontSize="11px";
+findWebBtn.style.padding="4px 8px";
+findWebBtn.style.marginLeft="8px";
+findWebBtn.onclick=async()=>{
+findWebBtn.textContent="Finding...";
+findWebBtn.disabled=true;
+const r=await fetch("/api/targets/"+t.id+"/find-website",{method:"POST"});
+const j=await r.json().catch(()=>({}));
+if(r.ok&&j.website){
+await refreshTargets();
+}else{
+findWebBtn.textContent="Not found";
+setTimeout(()=>{findWebBtn.textContent="Find Website";findWebBtn.disabled=false},2000);
+}
+};
+actions.appendChild(findWebBtn);
+}
+const approveBtn=document.createElement("button");
+approveBtn.textContent="Approve";
+approveBtn.style.fontSize="11px";
+approveBtn.style.padding="4px 8px";
+approveBtn.style.marginLeft="8px";
+approveBtn.style.background="#059669";
+approveBtn.style.color="white";
+approveBtn.style.border="none";
+approveBtn.onclick=async()=>{
+await fetch("/api/targets/"+t.id+"/approve",{method:"POST"});
+await refreshTargets();
+await refreshApprovedTargets();
+};
+actions.appendChild(approveBtn);
+card.appendChild(actions);
+el.appendChild(card);
+}
+}catch(e){
+console.error("refreshTargets error:",e);
+const el=document.getElementById("targets");
+if(el)el.innerHTML="<div class='muted bad'>Error loading targets</div>";
+}
+}
+async function refreshApprovedTargets(){
+try{
+const r=await fetch("/api/targets/approved");
+const items=await r.json();
+const el=document.getElementById("approvedTargets");
+if(!el)return;
+el.innerHTML="";
+if(!items.length){
+el.innerHTML="<div class='muted'>No approved targets yet.</div>";
+return;
+}
+for(const t of items){
+const card=document.createElement("div");
+card.className="target-card";
+const xLinkHtml=t.x_handle?("<a href='https://x.com/"+escapeHtml(t.x_handle.replace("@",""))+"' target='_blank' class='x-link'>@"+escapeHtml(t.x_handle.replace("@",""))+"</a>"):"";
+const webLinkHtml=t.website?("<a href='"+escapeHtml(t.website)+"' target='_blank' class='web-link'>🌐 website</a>"):"";
+const linksHtml=(xLinkHtml||webLinkHtml)?("<div style='margin-top:4px'>"+xLinkHtml+webLinkHtml+"</div>"):"";
+card.innerHTML="<div class='target-header'>"+escapeHtml(t.team_name)+"</div>"+
+linksHtml+
+"<div class='kv'>"+
+"<span class='pill money'>Raised: "+fmtMoney(t.raised_usd)+"</span>"+
+"<span class='pill money'>Rev: "+fmtMoney(t.monthly_revenue_usd)+"/mo</span>"+
+"</div>"+
+(t.notes?"<div class='muted tiny' style='margin-top:6px'>"+escapeHtml(t.notes)+"</div>":"");
+const actions=document.createElement("div");
+actions.style.marginTop="8px";
+const quickAddBtn=document.createElement("button");
+quickAddBtn.textContent="Quick Add Contact";
+quickAddBtn.style.fontSize="11px";
+quickAddBtn.style.padding="4px 8px";
+quickAddBtn.style.background="#7c3aed";
+quickAddBtn.style.color="white";
+quickAddBtn.style.border="none";
+quickAddBtn.onclick=()=>{
+showQuickAddModal(t);
+};
+actions.appendChild(quickAddBtn);
+if(t.x_handle){
+const discoverBtn=document.createElement("button");
+discoverBtn.textContent="Discover X Users";
+discoverBtn.style.fontSize="11px";
+discoverBtn.style.padding="4px 8px";
+discoverBtn.style.background="#1d9bf0";
+discoverBtn.style.color="white";
+discoverBtn.style.border="none";
+discoverBtn.style.marginLeft="8px";
+discoverBtn.onclick=async()=>{
+discoverBtn.textContent="Discovering...";
+discoverBtn.disabled=true;
+try{
+const res=await fetch("/api/targets/"+t.id+"/discover-x-users",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({max_users:5})
+});
+const data=await res.json();
+if(res.ok){
+alert("Found "+data.valid+" valid users! Check the queue.");
+await refreshQueue();
+discoverBtn.textContent="Discover X Users";
+discoverBtn.disabled=false;
+}else{
+if(data.code==="SEARCH_FAILED"){
+alert("Search failed. Please try again or check console for details.");
+}else{
+alert("Error: "+data.error);
+}
+discoverBtn.textContent="Discover X Users";
+discoverBtn.disabled=false;
+}
+}catch(err){
+alert("Error: "+err.message);
+discoverBtn.textContent="Discover X Users";
+discoverBtn.disabled=false;
+}
+};
+actions.appendChild(discoverBtn);
+const allContactsBtn=document.createElement("button");
+allContactsBtn.textContent="All Contacts";
+allContactsBtn.style.fontSize="11px";
+allContactsBtn.style.padding="4px 8px";
+allContactsBtn.style.background="#10a37f";
+allContactsBtn.style.color="white";
+allContactsBtn.style.border="none";
+allContactsBtn.style.marginLeft="8px";
+allContactsBtn.onclick=async()=>{
+allContactsBtn.textContent="Searching...";
+allContactsBtn.disabled=true;
+try{
+const res=await fetch("/api/targets/"+t.id+"/all-contacts",{
+method:"POST",
+headers:{"Content-Type":"application/json"}
+});
+const data=await res.json();
+if(res.ok){
+if(data.stored===0){
+alert("All contacts found - no new contacts to add");
+}else{
+showAllContactsModal(t,data.contacts);
+}
+allContactsBtn.textContent="All Contacts";
+allContactsBtn.disabled=false;
+}else{
+alert("Error: "+data.error);
+allContactsBtn.textContent="All Contacts";
+allContactsBtn.disabled=false;
+}
+}catch(err){
+alert("Error: "+err.message);
+allContactsBtn.textContent="All Contacts";
+allContactsBtn.disabled=false;
+}
+};
+actions.appendChild(allContactsBtn);
+const viewContactsBtn=document.createElement("button");
+viewContactsBtn.textContent="View Contacts";
+viewContactsBtn.style.fontSize="11px";
+viewContactsBtn.style.padding="4px 8px";
+viewContactsBtn.style.background="#6366f1";
+viewContactsBtn.style.color="white";
+viewContactsBtn.style.border="none";
+viewContactsBtn.style.marginLeft="8px";
+viewContactsBtn.onclick=async()=>{
+viewContactsBtn.textContent="Loading...";
+viewContactsBtn.disabled=true;
+try{
+const res=await fetch("/api/targets/"+t.id+"/view-contacts");
+const data=await res.json();
+if(res.ok){
+if(data.contacts.length===0){
+alert("No contacts found yet. Click 'All Contacts' to search.");
+}else{
+showAllContactsModal(t,data.contacts);
+}
+viewContactsBtn.textContent="View Contacts";
+viewContactsBtn.disabled=false;
+}else{
+alert("Error: "+data.error);
+viewContactsBtn.textContent="View Contacts";
+viewContactsBtn.disabled=false;
+}
+}catch(err){
+alert("Error: "+err.message);
+viewContactsBtn.textContent="View Contacts";
+viewContactsBtn.disabled=false;
+}
+};
+actions.appendChild(viewContactsBtn);
+}
+card.appendChild(actions);
+el.appendChild(card);
+}
+}catch(e){
+console.error("refreshApprovedTargets error:",e);
+const el=document.getElementById("approvedTargets");
+if(el)el.innerHTML="<div class='muted bad'>Error loading approved targets</div>";
+}
+}
+function showQuickAddModal(team){
+const existing=document.getElementById("quickAddModal");
+if(existing)existing.remove();
+const modal=document.createElement("div");
+modal.id="quickAddModal";
+modal.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000";
+const box=document.createElement("div");
+box.style.cssText="background:white;border-radius:12px;padding:24px;max-width:450px;width:90%";
+const header=document.createElement("h3");
+header.textContent="Quick Add Contact at "+team.team_name;
+header.style.marginBottom="16px";
+box.appendChild(header);
+const nameInput=document.createElement("input");
+nameInput.placeholder="Name (required)";
+nameInput.style.width="100%";
+nameInput.style.padding="8px";
+nameInput.style.marginBottom="10px";
+nameInput.style.boxSizing="border-box";
+box.appendChild(nameInput);
+const tgInput=document.createElement("input");
+tgInput.placeholder="Telegram handle (required, e.g., @jessepollak)";
+tgInput.style.width="100%";
+tgInput.style.padding="8px";
+tgInput.style.marginBottom="16px";
+tgInput.style.boxSizing="border-box";
+box.appendChild(tgInput);
+const btnRow=document.createElement("div");
+btnRow.style.display="flex";
+btnRow.style.gap="8px";
+const addBtn=document.createElement("button");
+addBtn.textContent="Add to Queue";
+addBtn.style.flex="1";
+addBtn.onclick=async()=>{
+const name=nameInput.value.trim();
+const tgHandle=tgInput.value.trim();
+if(!name){
+alert("Name is required");
+nameInput.focus();
+return;
+}
+if(!tgHandle){
+alert("Telegram handle is required");
+tgInput.focus();
+return;
+}
+addBtn.textContent="Adding...";
+addBtn.disabled=true;
+try{
+const r=await fetch("/api/contacts",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+name:name,
+company:team.team_name,
+telegram_handle:tgHandle,
+notes:"Quick add from "+team.team_name
+})
+});
+const j=await r.json();
+if(!r.ok){
+alert("Error: "+(j.error||"Failed to add contact"));
+addBtn.textContent="Add to Queue";
+addBtn.disabled=false;
+return;
+}
+const g=await fetch("/api/drafts/generate",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({contact_id:j.id})
+});
+const gj=await g.json();
+if(g.ok){
+await refreshQueue();
+modal.remove();
+const status=document.getElementById("status");
+if(status){
+status.className="muted ok";
+status.textContent="Contact added and draft generated ✅";
+setTimeout(()=>status.textContent="",3000);
+}
+}else{
+alert("Draft generation failed: "+(gj.error||"Unknown error"));
+addBtn.textContent="Add to Queue";
+addBtn.disabled=false;
+}
+}catch(e){
+alert("Error: "+e.message);
+addBtn.textContent="Add to Queue";
+addBtn.disabled=false;
+}
+};
+btnRow.appendChild(addBtn);
+const cancelBtn=document.createElement("button");
+cancelBtn.textContent="Cancel";
+cancelBtn.onclick=()=>modal.remove();
+btnRow.appendChild(cancelBtn);
+box.appendChild(btnRow);
+modal.appendChild(box);
+document.body.appendChild(modal);
+nameInput.focus();
+}
+function showManualContactModal(team){
+const existing=document.getElementById("manualContactModal");
+if(existing)existing.remove();
+const modal=document.createElement("div");
+modal.id="manualContactModal";
+modal.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000";
+const box=document.createElement("div");
+box.style.cssText="background:white;border-radius:12px;padding:24px;max-width:500px;width:90%;max-height:80vh;overflow:auto";
+const header=document.createElement("h3");
+header.textContent="Add Contact at "+team.team_name;
+box.appendChild(header);
+const form=document.createElement("div");
+form.innerHTML="<div style='margin:12px 0'><input id='manualName' placeholder='Name (required)' style='width:100%;padding:8px'></div>"+
+"<div style='margin:12px 0'><input id='manualTitle' placeholder='Title (e.g. CTO, Co-founder)' style='width:100%;padding:8px'></div>"+
+"<div style='margin:12px 0'><input id='manualTelegram' placeholder='Telegram handle (@username)' style='width:100%;padding:8px'></div>"+
+"<div style='margin:12px 0'><input id='manualNotes' placeholder='Notes (optional)' style='width:100%;padding:8px'></div>"+
+"<div style='margin-top:16px;display:flex;gap:8px'><button id='manualAddBtn'>Add Contact</button><button id='manualCancelBtn'>Cancel</button></div>"+
+"<div id='manualStatus' class='muted' style='margin-top:8px'></div>";
+box.appendChild(form);
+modal.appendChild(box);
+document.body.appendChild(modal);
+document.getElementById("manualCancelBtn").onclick=()=>modal.remove();
+document.getElementById("manualAddBtn").onclick=async()=>{
+const status=document.getElementById("manualStatus");
+const name=document.getElementById("manualName").value.trim();
+if(!name){
+status.className="muted bad";
+status.textContent="Name is required";
+return;
+}
+status.className="muted";
+status.textContent="Adding contact...";
+const contact={
+name:name,
+company:team.team_name,
+title:document.getElementById("manualTitle").value.trim(),
+telegram_handle:document.getElementById("manualTelegram").value.trim(),
+notes:document.getElementById("manualNotes").value.trim()
+};
+const r=await fetch("/api/contacts",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify(contact)
+});
+const j=await r.json();
+if(!r.ok){
+status.className="muted bad";
+status.textContent="Error: "+(j.error||"");
+return;
+}
+status.textContent="Generating draft...";
+const g=await fetch("/api/drafts/generate",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({contact_id:j.id})
+});
+const gj=await g.json();
+if(g.ok){
+status.className="muted ok";
+status.textContent="Draft generated ✅";
+await refreshQueue();
+setTimeout(()=>modal.remove(),1000);
+}else{
+status.className="muted bad";
+status.textContent="Error: "+(gj.error||"");
+}
+};
+}
+function showContactsModal(team,contacts){
+const existing=document.getElementById("contactsModal");
+if(existing)existing.remove();
+const modal=document.createElement("div");
+modal.id="contactsModal";
+modal.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;overflow:auto";
+const box=document.createElement("div");
+box.style.cssText="background:white;border-radius:12px;padding:24px;max-width:800px;width:90%;max-height:85vh;overflow:auto;margin:20px";
+const header=document.createElement("h3");
+header.textContent="Found Contacts at "+team.team_name;
+box.appendChild(header);
+const subtitle=document.createElement("div");
+subtitle.className="muted tiny";
+subtitle.style.marginBottom="16px";
+subtitle.textContent="Paste Telegram handles and add to queue";
+box.appendChild(subtitle);
+if(!contacts.length){
+const empty=document.createElement("div");
+empty.className="muted";
+empty.textContent="No contacts found. Try searching manually or checking the company website.";
+box.appendChild(empty);
+}else{
+for(let i=0;i<contacts.length;i++){
+const c=contacts[i];
+const cCard=document.createElement("div");
+cCard.className="card";
+cCard.style.margin="12px 0";
+cCard.style.background="#f9f9f9";
+const topRow=document.createElement("div");
+topRow.style.display="flex";
+topRow.style.justifyContent="space-between";
+topRow.style.alignItems="flex-start";
+topRow.style.marginBottom="8px";
+const infoDiv=document.createElement("div");
+infoDiv.style.flex="1";
+const nameDiv=document.createElement("div");
+const nameB=document.createElement("b");
+nameB.textContent=c.name||"Unknown";
+nameDiv.appendChild(nameB);
+infoDiv.appendChild(nameDiv);
+if(c.title){
+const titleDiv=document.createElement("div");
+titleDiv.className="muted tiny";
+titleDiv.textContent=c.title;
+infoDiv.appendChild(titleDiv);
+}
+topRow.appendChild(infoDiv);
+cCard.appendChild(topRow);
+const inputRow=document.createElement("div");
+inputRow.style.display="flex";
+inputRow.style.gap="8px";
+inputRow.style.marginTop="8px";
+const tgInput=document.createElement("input");
+tgInput.placeholder="Paste Telegram handle (@username)";
+tgInput.style.flex="1";
+tgInput.style.padding="6px 8px";
+tgInput.style.fontSize="13px";
+tgInput.id="tgInput_"+i;
+inputRow.appendChild(tgInput);
+const addBtn=document.createElement("button");
+addBtn.textContent="Add to Queue";
+addBtn.style.fontSize="11px";
+addBtn.style.padding="6px 12px";
+addBtn.style.whiteSpace="nowrap";
+addBtn.onclick=(function(contact,inputId,company){
+return async function(){
+const input=document.getElementById(inputId);
+const tgHandle=input.value.trim();
+if(!tgHandle){
+alert("Please enter a Telegram handle");
+return;
+}
+addBtn.textContent="Adding...";
+addBtn.disabled=true;
+await addContactFromModal({
+name:contact.name,
+title:contact.title||"",
+telegram_handle:tgHandle,
+notes:contact.notes||""
+},company);
+addBtn.textContent="Added ✅";
+addBtn.style.background="#059669";
+addBtn.style.color="white";
+input.disabled=true;
+};
+})(c,"tgInput_"+i,team.team_name);
+inputRow.appendChild(addBtn);
+cCard.appendChild(inputRow);
+box.appendChild(cCard);
+}
+}
+const closeBtn=document.createElement("button");
+closeBtn.textContent="Close";
+closeBtn.style.marginTop="16px";
+closeBtn.onclick=()=>modal.remove();
+box.appendChild(closeBtn);
+modal.appendChild(box);
+document.body.appendChild(modal);
+}
+async function addContactFromModal(contact,companyName){
+const status=document.getElementById("status");
+status.className="muted";
+status.textContent="Adding contact…";
+const body={
+name:contact.name,
+company:companyName,
+title:contact.title||"",
+telegram_handle:contact.telegram_handle||"",
+notes:contact.notes||"",
+};
+const r=await fetch("/api/contacts",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify(body)
+});
+const j=await r.json();
+if(!r.ok){
+status.className="muted bad";
+status.textContent="Error: "+(j.error||"");
+return;
+}
+status.textContent="Generating draft with Claude…";
+const g=await fetch("/api/drafts/generate",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({contact_id:j.id})
+});
+const gj=await g.json();
+status.className=g.ok?"muted ok":"muted bad";
+status.textContent=g.ok?"Draft generated ✅":("Error: "+[gj.error,gj.status,gj.name,gj.message].filter(Boolean).join(" | "));
+await refreshQueue();
+const modal=document.getElementById("contactsModal");
+if(modal)modal.remove();
+}
+function showAllContactsModal(team,contacts){
+const existing=document.getElementById("allContactsModal");
+if(existing)existing.remove();
+const modal=document.createElement("div");
+modal.id="allContactsModal";
+modal.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;overflow:auto";
+const box=document.createElement("div");
+box.style.cssText="background:white;border-radius:12px;padding:24px;max-width:900px;width:90%;max-height:85vh;overflow:auto;margin:20px";
+const header=document.createElement("h3");
+header.textContent="All Contacts at "+team.team_name;
+header.style.marginBottom="8px";
+box.appendChild(header);
+const subtitle=document.createElement("div");
+subtitle.className="muted tiny";
+subtitle.style.marginBottom="16px";
+subtitle.textContent="Employees found via X discovery, Google, and LinkedIn";
+box.appendChild(subtitle);
+if(!contacts||!contacts.length){
+const empty=document.createElement("div");
+empty.className="muted";
+empty.textContent="No contacts found. This may take a moment on first search.";
+box.appendChild(empty);
+}else{
+for(const c of contacts){
+const cCard=document.createElement("div");
+cCard.className="card";
+cCard.style.margin="12px 0";
+cCard.style.background="#f9f9f9";
+cCard.style.position="relative";
+const deleteBtn=document.createElement("button");
+deleteBtn.textContent="×";
+deleteBtn.style.cssText="position:absolute;top:8px;right:8px;background:#ff4444;color:white;border:none;border-radius:4px;width:24px;height:24px;cursor:pointer;font-size:18px;line-height:1;padding:0;font-weight:bold";
+deleteBtn.title="Remove contact";
+deleteBtn.onclick=async()=>{
+if(!confirm("Remove "+c.name+" from contacts?")){
+return;
+}
+try{
+const res=await fetch("/api/targets/"+team.id+"/contacts/"+c.id,{
+method:"DELETE"
+});
+if(res.ok){
+cCard.remove();
+if(box.querySelectorAll(".card").length===0){
+const empty=document.createElement("div");
+empty.className="muted";
+empty.textContent="No contacts found.";
+box.appendChild(empty);
+}
+}else{
+alert("Failed to delete contact");
+}
+}catch(err){
+alert("Error deleting contact: "+err.message);
+}
+};
+cCard.appendChild(deleteBtn);
+const nameRow=document.createElement("div");
+nameRow.style.display="flex";
+nameRow.style.alignItems="center";
+nameRow.style.gap="8px";
+nameRow.style.marginBottom="4px";
+const name=document.createElement("div");
+name.style.fontWeight="600";
+name.textContent=c.name;
+nameRow.appendChild(name);
+if(c.source==="x_discovery"){
+const badge=document.createElement("span");
+badge.textContent="X";
+badge.style.cssText="background:#1d9bf0;color:white;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600";
+nameRow.appendChild(badge);
+}
+cCard.appendChild(nameRow);
+if(c.title){
+const title=document.createElement("div");
+title.className="muted tiny";
+title.textContent=c.title;
+cCard.appendChild(title);
+}
+const contactInfo=document.createElement("div");
+contactInfo.style.marginTop="8px";
+contactInfo.style.fontSize="13px";
+if(c.email){
+const emailDiv=document.createElement("div");
+emailDiv.textContent="📧 "+c.email;
+contactInfo.appendChild(emailDiv);
+}
+if(c.phone){
+const phoneDiv=document.createElement("div");
+phoneDiv.textContent="📞 "+c.phone;
+contactInfo.appendChild(phoneDiv);
+}
+if(c.linkedin){
+const linkedinDiv=document.createElement("div");
+linkedinDiv.innerHTML="🔗 <a href='"+c.linkedin+"' target='_blank'>LinkedIn</a>";
+contactInfo.appendChild(linkedinDiv);
+}
+if(c.telegram_handle){
+const tgDiv=document.createElement("div");
+tgDiv.textContent="Telegram: "+c.telegram_handle;
+contactInfo.appendChild(tgDiv);
+}else if(c.x_username){
+const xDiv=document.createElement("div");
+xDiv.textContent="X: @"+c.x_username;
+contactInfo.appendChild(xDiv);
+}
+cCard.appendChild(contactInfo);
+box.appendChild(cCard);
+}
+}
+const closeBtn=document.createElement("button");
+closeBtn.textContent="Close";
+closeBtn.style.marginTop="16px";
+closeBtn.onclick=()=>modal.remove();
+box.appendChild(closeBtn);
+modal.appendChild(box);
+document.body.appendChild(modal);
+}
+async function researchTeams(){
+const status=document.getElementById("researchStatus");
+status.className="muted";
+status.textContent="🔍 Researching web3 teams with Claude...";
+try{
+const r=await fetch("/api/targets/research",{
+method:"POST",
+headers:{"Content-Type":"application/json"}
+});
+const j=await r.json();
+if(!r.ok){
+status.className="muted bad";
+status.textContent="Research failed: "+(j.error||r.status);
+return;
+}
+status.className="muted ok";
+status.textContent="✅ Found "+j.found+" teams, imported "+j.inserted+" (skipped: "+j.skipped+")";
+await refreshTargets();
+await refreshApprovedTargets();
+setTimeout(()=>status.textContent="",3000);
+}catch(e){
+console.error("researchTeams error:",e);
+status.className="muted bad";
+status.textContent="Research error: "+e.message;
+}
+}
+function openImporter(){
+const existing=document.getElementById("importerModal");
+if(existing)existing.remove();
+const modal=document.createElement("div");
+modal.id="importerModal";
+modal.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000";
+const box=document.createElement("div");
+box.style.cssText="background:white;border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:80vh;overflow:auto";
+box.innerHTML="<h3>Import Target Teams</h3>"+
+"<div class='muted tiny'>Paste JSON array with: team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle (optional), website (optional)</div>"+
+"<textarea id='importJson' style='height:200px;margin:12px 0;width:100%;font-family:monospace;font-size:12px' placeholder='Paste JSON here'></textarea>"+
+"<div style='display:flex;gap:8px'>"+
+"<button id='importBtn'>Import</button>"+
+"<button id='cancelBtn'>Cancel</button>"+
+"</div>"+
+"<div id='importStatus' class='muted' style='margin-top:8px'></div>";
+modal.appendChild(box);
+document.body.appendChild(modal);
+document.getElementById("cancelBtn").onclick=()=>modal.remove();
+document.getElementById("importBtn").onclick=async()=>{
+const status=document.getElementById("importStatus");
+status.textContent="Importing…";
+let payload;
+try{
+payload=JSON.parse(document.getElementById("importJson").value);
+}catch(e){
+status.className="muted bad";
+status.textContent="Invalid JSON";
+return;
+}
+const r=await fetch("/api/targets/import",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({items:payload})
+});
+const j=await r.json().catch(()=>({}));
+if(!r.ok){
+status.className="muted bad";
+status.textContent="Import failed: "+(j.error||r.status);
+return;
+}
+status.className="muted ok";
+status.textContent="Imported: "+j.inserted+" (skipped: "+j.skipped+")";
+await refreshTargets();
+await refreshApprovedTargets();
+setTimeout(()=>modal.remove(),1500);
+};
+}
+async function addContact(){
+const status=document.getElementById("status");
+status.className="muted";
+status.textContent="Adding contact…";
+const body={
+name:document.getElementById("name").value.trim(),
+company:document.getElementById("company").value.trim(),
+telegram_handle:document.getElementById("tg").value.trim(),
+notes:document.getElementById("notes").value.trim(),
+};
+const r=await fetch("/api/contacts",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify(body)
+});
+const j=await r.json();
+if(!r.ok){
+status.className="muted bad";
+status.textContent="Error: "+(j.error||"");
+return;
+}
+status.textContent="Generating draft with Claude…";
+const g=await fetch("/api/drafts/generate",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({contact_id:j.id})
+});
+const gj=await g.json();
+status.className=g.ok?"muted ok":"muted bad";
+status.textContent=g.ok?"Draft generated ✅":("Error: "+[gj.error,gj.status,gj.name,gj.message].filter(Boolean).join(" | "));
+await refreshQueue();
+}
+async function checkClaude(){
+const status=document.getElementById("status");
+status.className="muted";
+status.textContent="Checking Claude…";
+const r=await fetch("/api/health/claude");
+const j=await r.json();
+if(r.ok&&j.ok){
+status.className="muted ok";
+status.textContent="Claude OK ✅";
+}else{
+status.className="muted bad";
+status.textContent="Claude error: "+[j.status,j.name,j.message].filter(Boolean).join(" | ");
+}
+}
+async function discoverFromX(){
+const handle=document.getElementById("xCompanyHandle").value.trim();
+const statusEl=document.getElementById("xDiscoveryStatus");
+if(!handle){
+statusEl.className="muted bad";
+statusEl.textContent="Please enter a company X handle";
+return;
+}
+statusEl.className="muted";
+statusEl.textContent="Searching X and validating Telegram...";
+try{
+const res=await fetch("/api/workflow/x-discovery",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({x_handle:handle,max_users:5})
+});
+const data=await res.json();
+if(res.ok){
+statusEl.className="muted ok";
+statusEl.textContent="Found "+data.valid+" valid users, "+data.invalid+" without Telegram. "+data.drafts_generated+" drafts created.";
+await refreshQueue();
+document.getElementById("xCompanyHandle").value="";
+}else{
+statusEl.className="muted bad";
+if(data.code==="SEARCH_FAILED"){
+statusEl.textContent="Search failed. Please try a different company handle.";
+}else{
+statusEl.textContent="Error: "+data.error;
+}
+}
+}catch(err){
+statusEl.className="muted bad";
+statusEl.textContent="Error: "+err.message;
+}
+}
+async function refreshFollowUpMessages(){
+try{
+const r=await fetch("/api/drafts/followups");
+const items=await r.json();
+const el=document.getElementById("followUpMessages");
+if(!el)return;
+el.innerHTML="";
+if(!items.length){
+el.innerHTML="<div class='muted'>No follow-ups sent yet.</div>";
+return;
+}
+// Group follow-ups by contact
+const contactGroups=new Map();
+for(const it of items){
+if(!contactGroups.has(it.contact_id)){
+contactGroups.set(it.contact_id,{
+contact:it,
+followUps:[]
+});
+}
+contactGroups.get(it.contact_id).followUps.push(it);
+}
+// Display one card per contact with all their follow-ups
+for(const[contactId,group]of contactGroups){
+const card=document.createElement("div");
+card.className="card";
+card.style.background="#fef3c7";
+card.style.border="1px solid #fbbf24";
+const header=document.createElement("div");
+const tgShow=group.contact.telegram_handle?("@"+group.contact.telegram_handle.replace("@","")):"no TG handle";
+const followUpCount=group.followUps.length;
+header.innerHTML="<b>"+escapeHtml(group.contact.name)+"</b> "+
+"<span class='pill' style='background:#fbbf24;color:#78350f'>follow-up: "+followUpCount+"</span><br>"+
+"<span class='muted'>"+escapeHtml(tgShow)+"</span>";
+card.appendChild(header);
+// Show preview of most recent follow-up
+const mostRecent=group.followUps[0];
+const msgPreview=document.createElement("div");
+msgPreview.className="muted tiny";
+msgPreview.style.marginTop="6px";
+msgPreview.style.padding="6px";
+msgPreview.style.background="white";
+msgPreview.style.borderRadius="4px";
+msgPreview.textContent=mostRecent.message_text.substring(0,100)+(mostRecent.message_text.length>100?"...":"");
+card.appendChild(msgPreview);
+const btnRow=document.createElement("div");
+btnRow.style.marginTop="8px";
+btnRow.style.display="flex";
+btnRow.style.gap="8px";
+const viewHistoryBtn=document.createElement("button");
+viewHistoryBtn.textContent="View History ("+followUpCount+")";
+viewHistoryBtn.style.fontSize="11px";
+viewHistoryBtn.style.padding="4px 8px";
+viewHistoryBtn.onclick=()=>{
+showFollowUpHistoryModal(group.contact,group.followUps);
+};
+btnRow.appendChild(viewHistoryBtn);
+const followUpBtn=document.createElement("button");
+followUpBtn.textContent="Send Follow-up";
+followUpBtn.style.fontSize="11px";
+followUpBtn.style.padding="4px 8px";
+followUpBtn.onclick=()=>{
+showFollowUpModal(mostRecent);
+};
+btnRow.appendChild(followUpBtn);
+const dismissBtn=document.createElement("button");
+dismissBtn.textContent="Dismiss";
+dismissBtn.style.fontSize="11px";
+dismissBtn.style.padding="4px 8px";
+dismissBtn.onclick=async()=>{
+await fetch("/api/drafts/"+mostRecent.id+"/skip",{method:"POST"});
+await refreshFollowUpMessages();
+};
+btnRow.appendChild(dismissBtn);
+card.appendChild(btnRow);
+el.appendChild(card);
+}
+}catch(e){
+console.error("refreshFollowUpMessages error:",e);
+const el=document.getElementById("followUpMessages");
+if(el)el.innerHTML="<div class='muted bad'>Error loading follow-ups</div>";
+}
+}
+function showFollowUpHistoryModal(contact,followUps){
+const existing=document.getElementById("historyModal");
+if(existing)existing.remove();
+const modal=document.createElement("div");
+modal.id="historyModal";
+modal.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000";
+const box=document.createElement("div");
+box.style.cssText="background:white;border-radius:12px;padding:24px;max-width:700px;width:90%;max-height:85vh;overflow:auto";
+const header=document.createElement("h3");
+header.textContent="Follow-up History: "+contact.name;
+header.style.marginBottom="8px";
+box.appendChild(header);
+const subtitle=document.createElement("div");
+subtitle.className="muted tiny";
+subtitle.style.marginBottom="16px";
+subtitle.textContent=contact.company+" • @"+(contact.telegram_handle||"").replace("@","")+" • "+followUps.length+" follow-up"+(followUps.length>1?"s":"");
+box.appendChild(subtitle);
+// Sort by newest first
+const sorted=[...followUps].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));
+for(let i=0;i<sorted.length;i++){
+const fu=sorted[i];
+const msgCard=document.createElement("div");
+msgCard.style.padding="12px";
+msgCard.style.background="#fef3c7";
+msgCard.style.borderRadius="8px";
+msgCard.style.marginBottom="12px";
+msgCard.style.border="1px solid #fbbf24";
+const msgHeader=document.createElement("div");
+msgHeader.className="muted tiny";
+msgHeader.style.marginBottom="6px";
+msgHeader.textContent="Follow-up #"+(sorted.length-i)+" • "+new Date(fu.updated_at).toLocaleDateString();
+msgCard.appendChild(msgHeader);
+const msgText=document.createElement("div");
+msgText.style.whiteSpace="pre-wrap";
+msgText.style.lineHeight="1.5";
+msgText.textContent=fu.message_text;
+msgCard.appendChild(msgText);
+box.appendChild(msgCard);
+}
+const closeBtn=document.createElement("button");
+closeBtn.textContent="Close";
+closeBtn.style.marginTop="16px";
+closeBtn.onclick=()=>modal.remove();
+box.appendChild(closeBtn);
+modal.appendChild(box);
+document.body.appendChild(modal);
+}
+async function refreshSentMessages(){
+try{
+const r=await fetch("/api/drafts/sent");
+const items=await r.json();
+const el=document.getElementById("sentMessages");
+if(!el)return;
+el.innerHTML="";
+if(!items.length){
+el.innerHTML="<div class='muted'>No sent messages yet.</div>";
+return;
+}
+for(const it of items){
+const card=document.createElement("div");
+card.className="card";
+card.style.background="#f0fdf4";
+card.style.border="1px solid #86efac";
+const header=document.createElement("div");
+const tgShow=it.telegram_handle?("@"+it.telegram_handle.replace("@","")):"no TG handle";
+header.innerHTML="<b>"+escapeHtml(it.name)+"</b> "+
+"<span class='pill' style='background:#86efac;color:#166534'>sent</span><br>"+
+"<span class='muted'>"+escapeHtml(tgShow)+"</span>";
+card.appendChild(header);
+const msgPreview=document.createElement("div");
+msgPreview.className="muted tiny";
+msgPreview.style.marginTop="6px";
+msgPreview.style.padding="6px";
+msgPreview.style.background="white";
+msgPreview.style.borderRadius="4px";
+msgPreview.style.cursor="pointer";
+msgPreview.textContent=it.message_text.substring(0,100)+(it.message_text.length>100?"... (click to view full)":"");
+msgPreview.onclick=()=>{
+showFullMessageModal(it);
+};
+card.appendChild(msgPreview);
+const btnRow=document.createElement("div");
+btnRow.style.marginTop="8px";
+btnRow.style.display="flex";
+btnRow.style.gap="8px";
+const followUpBtn=document.createElement("button");
+followUpBtn.textContent="Send Follow-up";
+followUpBtn.style.fontSize="11px";
+followUpBtn.style.padding="4px 8px";
+followUpBtn.onclick=()=>{
+showFollowUpModal(it);
+};
+btnRow.appendChild(followUpBtn);
+btnRow.appendChild(followUpBtn);
+const dismissBtn=document.createElement("button");
+dismissBtn.textContent="Dismiss";
+dismissBtn.style.fontSize="11px";
+dismissBtn.style.padding="4px 8px";
+dismissBtn.onclick=async()=>{
+await fetch("/api/drafts/"+it.id+"/skip",{method:"POST"});
+await refreshSentMessages();
+};
+btnRow.appendChild(dismissBtn);
+card.appendChild(btnRow);
+el.appendChild(card);
+}
+}catch(e){
+console.error("refreshSentMessages error:",e);
+const el=document.getElementById("sentMessages");
+if(el)el.innerHTML="<div class='muted bad'>Error loading sent messages</div>";
+}
+}
+function showFollowUpModal(sentMessage){
+const existing=document.getElementById("followUpModal");
+if(existing)existing.remove();
+const modal=document.createElement("div");
+modal.id="followUpModal";
+modal.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000";
+const box=document.createElement("div");
+box.style.cssText="background:white;border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:85vh;overflow:auto";
+const header=document.createElement("h3");
+header.textContent="Follow-up to "+sentMessage.name;
+header.style.marginBottom="8px";
+box.appendChild(header);
+const context=document.createElement("div");
+context.className="muted tiny";
+context.style.marginBottom="12px";
+context.textContent="Previous message sent to @"+(sentMessage.telegram_handle||"").replace("@","");
+box.appendChild(context);
+const prevMsg=document.createElement("div");
+prevMsg.style.padding="8px";
+prevMsg.style.background="#f0fdf4";
+prevMsg.style.borderLeft="3px solid #86efac";
+prevMsg.style.marginBottom="12px";
+prevMsg.style.fontSize="12px";
+prevMsg.style.whiteSpace="pre-wrap";
+prevMsg.textContent=sentMessage.message_text.substring(0,200)+(sentMessage.message_text.length>200?"...":"");
+box.appendChild(prevMsg);
+const statusDiv=document.createElement("div");
+statusDiv.className="muted";
+statusDiv.style.marginBottom="12px";
+statusDiv.textContent="Generating follow-up with Claude...";
+box.appendChild(statusDiv);
+const label=document.createElement("div");
+label.style.marginBottom="6px";
+label.style.fontWeight="500";
+label.textContent="Follow-up message:";
+box.appendChild(label);
+const textarea=document.createElement("textarea");
+textarea.placeholder="Generating...";
+textarea.disabled=true;
+textarea.style.width="100%";
+textarea.style.height="120px";
+textarea.style.padding="8px";
+textarea.style.boxSizing="border-box";
+textarea.style.marginBottom="12px";
+textarea.style.fontFamily="inherit";
+box.appendChild(textarea);
+const btnRow=document.createElement("div");
+btnRow.style.display="flex";
+btnRow.style.gap="8px";
+const sendBtn=document.createElement("button");
+sendBtn.textContent="Send Follow-up";
+sendBtn.style.flex="1";
+sendBtn.disabled=true;
+sendBtn.onclick=async()=>{
+const followUpText=textarea.value.trim();
+if(!followUpText){
+alert("Please write a follow-up message");
+textarea.focus();
+return;
+}
+sendBtn.textContent="Sending...";
+sendBtn.disabled=true;
+try{
+const r=await fetch("/api/drafts/send-followup",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+contact_id:sentMessage.contact_id,
+telegram_handle:sentMessage.telegram_handle,
+message_text:followUpText,
+original_message:sentMessage.message_text,
+contact_name:sentMessage.name,
+company:sentMessage.company,
+auto_send:true
+})
+});
+const j=await r.json();
+if(!r.ok){
+alert("Failed: "+(j.error||"Unknown error"));
+sendBtn.textContent="Send Follow-up";
+sendBtn.disabled=false;
+return;
+}
+modal.remove();
+await refreshSentMessages();
+await refreshFollowUpMessages();
+}catch(e){
+alert("Error: "+e.message);
+sendBtn.textContent="Send Follow-up";
+sendBtn.disabled=false;
+}
+};
+btnRow.appendChild(sendBtn);
+const cancelBtn=document.createElement("button");
+cancelBtn.textContent="Cancel";
+cancelBtn.onclick=()=>modal.remove();
+btnRow.appendChild(cancelBtn);
+box.appendChild(btnRow);
+modal.appendChild(box);
+document.body.appendChild(modal);
+(async()=>{
+try{
+const r=await fetch("/api/drafts/generate-followup",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+contact_name:sentMessage.name,
+company:sentMessage.company,
+original_message:sentMessage.message_text
+})
+});
+const j=await r.json();
+if(r.ok&&j.message_text){
+textarea.value=j.message_text;
+textarea.disabled=false;
+sendBtn.disabled=false;
+statusDiv.className="muted ok";
+statusDiv.textContent="Follow-up generated ✅ (edit if needed)";
+}else{
+textarea.value="";
+textarea.placeholder="Generation failed, write your follow-up here...";
+textarea.disabled=false;
+sendBtn.disabled=false;
+statusDiv.className="muted bad";
+statusDiv.textContent="Generation failed: "+(j.error||"Unknown error");
+}
+}catch(e){
+textarea.value="";
+textarea.placeholder="Generation failed, write your follow-up here...";
+textarea.disabled=false;
+sendBtn.disabled=false;
+statusDiv.className="muted bad";
+statusDiv.textContent="Error: "+e.message;
+}
+})();
+}
+function showFullMessageModal(message){
+const existing=document.getElementById("fullMessageModal");
+if(existing)existing.remove();
+const modal=document.createElement("div");
+modal.id="fullMessageModal";
+modal.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000";
+const box=document.createElement("div");
+box.style.cssText="background:white;border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:80vh;overflow:auto";
+const header=document.createElement("h3");
+header.textContent="Message to "+message.name;
+header.style.marginBottom="8px";
+box.appendChild(header);
+const company=document.createElement("div");
+company.className="muted tiny";
+company.style.marginBottom="16px";
+company.textContent=message.company+(message.telegram_handle?" • @"+message.telegram_handle.replace("@",""):"");
+box.appendChild(company);
+const msgText=document.createElement("div");
+msgText.style.padding="12px";
+msgText.style.background="#f9f9f9";
+msgText.style.borderRadius="8px";
+msgText.style.whiteSpace="pre-wrap";
+msgText.style.lineHeight="1.5";
+msgText.textContent=message.message_text;
+box.appendChild(msgText);
+const closeBtn=document.createElement("button");
+closeBtn.textContent="Close";
+closeBtn.style.marginTop="16px";
+closeBtn.onclick=()=>modal.remove();
+box.appendChild(closeBtn);
+modal.appendChild(box);
+document.body.appendChild(modal);
+}
+async function refreshQueue(){
+try{
+const r=await fetch("/api/queue");
+const items=await r.json();
+const el=document.getElementById("queue");
+if(!el)return;
+el.innerHTML="";
+if(!items.length){
+el.innerHTML="<div class='muted'>Queue empty.</div>";
+return;
+}
+for(const it of items){
+const card=document.createElement("div");
+card.className="card";
+card.style.background="#e3f2fd";  // Light blue background
+card.style.border="1px solid #2196F3";  // Blue border
+const header=document.createElement("div");
+const tgShow=it.telegram_handle?("@"+it.telegram_handle.replace("@","")):"no TG handle";
+header.innerHTML="<b>"+escapeHtml(it.name)+"</b> "+
+"<span class='pill' style='background:#2196F3;color:white'>"+escapeHtml(it.status)+"</span><br>"+
+"<span class='muted'>"+escapeHtml(tgShow)+"</span>";
+card.appendChild(header);
+const ta=document.createElement("textarea");
+ta.value=it.message_text;
+ta.onchange=async()=>{
+await fetch("/api/drafts/"+it.id+"/update",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({message_text:ta.value})
+});
+};
+card.appendChild(ta);
+const row=document.createElement("div");
+row.className="row";
+const copyBtn=document.createElement("button");
+copyBtn.textContent="Copy";
+copyBtn.onclick=async()=>{
+await navigator.clipboard.writeText(ta.value);
+copyBtn.textContent="Copied ✅";
+setTimeout(()=>copyBtn.textContent="Copy",900);
+};
+row.appendChild(copyBtn);
+const approveBtn=document.createElement("button");
+approveBtn.textContent="Approve + Open TG + Paste";
+approveBtn.onclick=async()=>{
+const r=await fetch("/api/drafts/"+it.id+"/approve-open-telegram",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({message_text:ta.value})
+});
+const j=await r.json().catch(()=>({}));
+if(!r.ok){
+alert("Failed: "+(j.error||j.message||r.status));
+return;
+}
+await refreshQueue();
+await refreshSentMessages();
+};
+row.appendChild(approveBtn);
+const dismissBtn=document.createElement("button");
+dismissBtn.textContent="Dismiss";
+dismissBtn.onclick=async()=>{
+await fetch("/api/drafts/"+it.id+"/skip",{method:"POST"});
+await refreshQueue();
+await refreshSentMessages();
+};
+row.appendChild(dismissBtn);
+card.appendChild(row);
+el.appendChild(card);
+}
+}catch(e){
+console.error("refreshQueue error:",e);
+const el=document.getElementById("queue");
+if(el)el.innerHTML="<div class='muted bad'>Error loading queue</div>";
+}
+}
+if(document.readyState==="loading"){
+document.addEventListener("DOMContentLoaded",function(){
+refreshQueue();
+refreshSentMessages();
+refreshFollowUpMessages();
+refreshTargets();
+refreshApprovedTargets();
+});
+}else{
+refreshQueue();
+refreshSentMessages();
+refreshFollowUpMessages();
+refreshTargets();
+refreshApprovedTargets();
+}
+</script>
+</body>
+</html>`);
+});
+
+app.get("/api/targets/approved", (req, res) => {
+  const rows = db.prepare(`
+    SELECT * FROM targets
+    WHERE status = 'approved'
+      AND is_web3 = 1
+      AND raised_usd >= 10000000
+      AND monthly_revenue_usd >= 1000000
+    ORDER BY updated_at DESC
+    LIMIT 50
+  `).all();
+  res.json(rows);
+});
+
+app.post("/api/targets/:id/approve", (req, res) => {
+  const { id } = req.params;
+  const info = db.prepare(`UPDATE targets SET status = 'approved', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+  if (info.changes === 0) return res.status(404).json({ error: "target not found" });
+  res.json({ ok: true });
+});
+
+app.get("/api/targets", (req, res) => {
+  const rows = db.prepare(`
+    SELECT * FROM targets
+    WHERE status = 'pending'
+      AND is_web3 = 1
+      AND raised_usd >= 10000000
+      AND monthly_revenue_usd >= 1000000
+      AND id NOT IN (
+        SELECT t1.id FROM targets t1
+        INNER JOIN targets t2 ON (
+          t2.status IN ('approved', 'dismissed')
+          AND (
+            (t1.x_handle IS NOT NULL AND t1.x_handle = t2.x_handle)
+            OR (t1.website IS NOT NULL AND t1.website = t2.website)
+            OR (LOWER(TRIM(t1.team_name)) = LOWER(TRIM(t2.team_name)))
+          )
+        )
+        WHERE t1.status = 'active'
+      )
+    ORDER BY monthly_revenue_usd DESC, raised_usd DESC
+    LIMIT 50
+  `).all();
+  res.json(rows);
+});
+
+app.post("/api/targets/:id/find-contacts", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const target = db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+    if (!target) return res.status(404).json({ error: "target not found" });
+
+    console.log(`🔍 Finding contacts for ${target.team_name}...`);
+
+    // Step 1: Search for team members and their X profiles
+    const searchPrompt = `Search the web to find team members at ${target.team_name} who would be relevant for discussing blockchain infrastructure services.
+
+Look for:
+- Founders, Co-founders, CEO
+- CTO, VP Engineering, Head of Engineering
+- Head of Product, Head of Infrastructure
+- Technical decision makers
+
+For EACH person you find, you MUST locate their X/Twitter profile and get their X username (the @handle).
+
+Search strategies:
+1. Search "${target.team_name} founder twitter" or "${target.team_name} CTO twitter"
+2. Visit the company website ${target.website || ''} and look for team pages with social links
+3. Search "${target.team_name} team members"
+4. Look at the company's X account ${target.x_handle ? '@' + target.x_handle : ''} followers/following for team members
+
+For each person, you must find their X username by visiting their X profile.
+
+CRITICAL: Only include people where you have successfully found their X username.
+
+Respond with ONLY valid JSON:
+[
+  {
+    "name": "Full Name",
+    "x_username": "theirusername",
+    "title": "Their role/title",
+    "notes": "Why they're relevant"
+  }
+]
+
+Find 5-10 key team members. If you can't find anyone with X usernames, return: []`;
+
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 4000,
+      system: "You are a research assistant. Always respond with valid JSON only, no additional text.",
+      tools: [{
+        type: "web_search_20250305",
+        name: "web_search"
+      }],
+      messages: [{ role: "user", content: searchPrompt }]
+    });
+
+    let responseText = "";
+    for (const block of msg.content) {
+      if (block.type === "text") {
+        responseText += block.text;
+      }
+    }
+    
+    console.log("Raw search response:", responseText.substring(0, 800));
+    
+    let contacts = [];
+    let cleanText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    
+    const jsonMatch = cleanText.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      try {
+        contacts = JSON.parse(jsonMatch[0]);
+        console.log(`✅ Parsed ${contacts.length} contacts from initial search`);
+      } catch (e) {
+        console.error("Failed to parse JSON:", e);
+        console.error("Attempted to parse:", jsonMatch[0].substring(0, 500));
+        return res.status(500).json({ 
+          error: "Failed to parse contact data",
+          details: e.message,
+          sample: jsonMatch[0].substring(0, 300)
+        });
+      }
+    } else {
+      console.log("⚠️ No JSON array found in response");
+      console.log("Full response:", cleanText.substring(0, 1000));
+    }
+
+    if (!Array.isArray(contacts)) {
+      contacts = [];
+    }
+
+    console.log(`📊 Found ${contacts.length} team members with X usernames`);
+
+    // Step 2: For each contact, try to find their Telegram handle
+    // Try multiple patterns: X username, firstname+lastname, firstname_lastname, etc.
+    for (let i = 0; i < contacts.length; i++) {
+      const contact = contacts[i];
+      if (!contact.x_username) continue;
+      
+      const xUsername = contact.x_username.replace('@', '');
+      const xUrl = `https://x.com/${xUsername}`;
+      
+      try {
+        console.log(`🔍 Verifying ${contact.name} (@${xUsername})...`);
+        
+        // Verify this person actually works at the company by checking their X bio
+        const verifyPrompt = `Visit ${xUrl} and check if this person's X profile bio or description mentions ${target.team_name} or @${target.x_handle || target.team_name}.
+
+Respond with ONLY:
+VERIFIED - if their bio clearly indicates they work at ${target.team_name}
+NOT_VERIFIED - if there's no mention of the company`;
+
+        const verifyMsg = await anthropic.messages.create({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 20,
+          tools: [{
+            type: "web_search_20250305",
+            name: "web_search"
+          }],
+          messages: [{ role: "user", content: verifyPrompt }]
+        });
+
+        let verifyResponse = "";
+        for (const block of verifyMsg.content) {
+          if (block.type === "text") {
+            verifyResponse += block.text;
+          }
+        }
+
+        const isVerified = verifyResponse.trim().toUpperCase().includes("VERIFIED");
+        
+        if (!isVerified) {
+          console.log(`❌ Could not verify ${contact.name} works at ${target.team_name}`);
+          contact.verified = false;
+          continue;
+        }
+        
+        console.log(`✅ Verified ${contact.name} works at ${target.team_name}`);
+        contact.verified = true;
+        
+        // Generate possible Telegram usernames to try
+        const possibleHandles = [xUsername]; // Start with X username
+        
+        // Add various name combinations
+        const nameParts = contact.name.toLowerCase().split(' ').filter(p => p.length > 0);
+        if (nameParts.length >= 2) {
+          const first = nameParts[0];
+          const last = nameParts[nameParts.length - 1];
+          
+          // Common patterns
+          possibleHandles.push(first + last);           // derrickyen
+          possibleHandles.push(first + '_' + last);     // derrick_yen
+          possibleHandles.push(first + '.' + last);     // derrick.yen
+          possibleHandles.push(last + first);           // yenderrick
+          possibleHandles.push(last + '_' + first);     // yen_derrick
+          possibleHandles.push(last + '.' + first);     // yen.derrick
+          possibleHandles.push(first + last.charAt(0)); // derricky
+          possibleHandles.push(first.charAt(0) + last); // dyen
+          
+          // If there's a middle name or multiple parts, try first + last ignoring middle
+          if (nameParts.length > 2) {
+            possibleHandles.push(nameParts[0] + nameParts[nameParts.length - 1]);
+            possibleHandles.push(nameParts[0] + '_' + nameParts[nameParts.length - 1]);
+            possibleHandles.push(nameParts[0] + '.' + nameParts[nameParts.length - 1]);
+          }
+        }
+        
+        // Remove duplicates
+        const uniqueHandles = [...new Set(possibleHandles)];
+        console.log(`📋 Will try ${uniqueHandles.length} possible handles for ${contact.name}: ${uniqueHandles.slice(0, 5).join(', ')}...`);
+        
+        // Try each possible handle
+        let foundTelegram = false;
+        for (const handle of uniqueHandles) {
+          const tgUrl = `https://t.me/${handle}`;
+          console.log(`🔍 Trying Telegram: ${tgUrl}...`);
+          
+          try {
+            const tgCheckPrompt = `Check if ${tgUrl} exists and shows a valid Telegram user profile.
+
+Respond with ONLY:
+EXISTS - if you can see a Telegram profile page
+NOT_FOUND - if you see an error or "user not found"`;
+
+            const tgMsg = await anthropic.messages.create({
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 20,
+              tools: [{
+                type: "web_search_20250305",
+                name: "web_search"
+              }],
+              messages: [{ role: "user", content: tgCheckPrompt }]
+            });
+
+            let tgResponse = "";
+            for (const block of tgMsg.content) {
+              if (block.type === "text") {
+                tgResponse += block.text;
+              }
+            }
+
+            const tgExists = tgResponse.trim().toUpperCase().includes("EXISTS");
+            if (tgExists) {
+              contact.telegram_handle = handle;
+              console.log(`✅ Telegram found: @${handle} for ${contact.name}`);
+              foundTelegram = true;
+              break; // Stop trying once we find one
+            } else {
+              console.log(`❌ No Telegram at @${handle}`);
+            }
+            
+            await new Promise(r => setTimeout(r, 500));
+          } catch (e) {
+            console.error(`Error checking @${handle}:`, e.message);
+          }
+        }
+        
+        if (!foundTelegram) {
+          console.log(`⚠️ No Telegram found for ${contact.name} after trying ${possibleHandles.length} patterns`);
+        }
+        
+        await new Promise(r => setTimeout(r, 300));
+      } catch (e) {
+        console.error(`Error processing ${contact.name}:`, e.message);
+        contact.verified = false;
+      }
+    }
+
+    // Filter to only verified contacts
+    const verifiedContacts = contacts.filter(c => c.verified !== false);
+    
+    console.log(`✅ Returning ${verifiedContacts.length} verified contacts, ${verifiedContacts.filter(c => c.telegram_handle).length} with Telegram`);
+    res.json({ ok: true, contacts: verifiedContacts });
+
+  } catch (e) {
+    console.error("find-contacts error:", e);
+    res.status(500).json({ error: "failed to find contacts", message: e.message });
+  }
+});
+
+app.post("/api/targets/:id/find-website", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const target = db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+    if (!target) return res.status(404).json({ error: "target not found" });
+
+    console.log(`🔍 Finding website for ${target.team_name}...`);
+
+    const searchPrompt = `Find the official website URL for ${target.team_name}. This is a web3/crypto company.
+
+Search for their official website and respond with ONLY the full URL including https://.
+If you cannot find an official website, respond with just the word "none".
+
+Example responses:
+- "https://uniswap.org" (for Uniswap)
+- "https://aave.com" (for Aave)
+- "none" (if not found)`;
+
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 150,
+      tools: [{
+        type: "web_search_20250305",
+        name: "web_search"
+      }],
+      messages: [{ role: "user", content: searchPrompt }]
+    });
+
+    let responseText = "";
+    for (const block of msg.content) {
+      if (block.type === "text") {
+        responseText += block.text;
+      }
+    }
+
+    const website = responseText.trim().toLowerCase();
+    
+    if (website && website !== "none" && (website.startsWith("http://") || website.startsWith("https://"))) {
+      db.prepare("UPDATE targets SET website = ?, updated_at = ? WHERE id = ?").run(website, nowISO(), id);
+      console.log(`✅ Found website for ${target.team_name}: ${website}`);
+      res.json({ ok: true, website });
+    } else {
+      console.log(`❌ No website found for ${target.team_name}`);
+      res.json({ ok: true, website: null });
+    }
+
+  } catch (e) {
+    console.error("find-website error:", e);
+    res.status(500).json({ error: "failed to find website", message: e.message });
+  }
+});
+
+app.post("/api/targets/:id/find-x-handle", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const target = db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+    if (!target) return res.status(404).json({ error: "target not found" });
+
+    console.log(`🔍 Finding X handle for ${target.team_name}...`);
+
+    const searchPrompt = `Find the official X (Twitter) handle for ${target.team_name}. This is a web3/crypto company.
+
+Search for their official X/Twitter account and respond with ONLY the handle (without the @ symbol).
+If you cannot find a verified official account, respond with just the word "none".
+
+Example responses:
+- "ethereum" (for Ethereum Foundation)
+- "uniswap" (for Uniswap)
+- "none" (if not found)`;
+
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 100,
+      tools: [{
+        type: "web_search_20250305",
+        name: "web_search"
+      }],
+      messages: [{ role: "user", content: searchPrompt }]
+    });
+
+    let responseText = "";
+    for (const block of msg.content) {
+      if (block.type === "text") {
+        responseText += block.text;
+      }
+    }
+
+    const handle = responseText.trim().toLowerCase().replace("@", "");
+    
+    if (handle && handle !== "none" && handle.length > 0 && handle.length < 50) {
+      db.prepare("UPDATE targets SET x_handle = ?, updated_at = ? WHERE id = ?").run(handle, nowISO(), id);
+      console.log(`✅ Found X handle for ${target.team_name}: @${handle}`);
+      res.json({ ok: true, x_handle: handle });
+    } else {
+      console.log(`❌ No X handle found for ${target.team_name}`);
+      res.json({ ok: true, x_handle: null });
+    }
+
+  } catch (e) {
+    console.error("find-x-handle error:", e);
+    res.status(500).json({ error: "failed to find X handle", message: e.message });
+  }
+});
+
+app.post("/api/targets/research", async (req, res) => {
+  try {
+    const { auto_discover_x_users = false, max_users_per_team = 5 } = req.body;
+
+    console.log("🔍 Starting autonomous team research...");
+    if (auto_discover_x_users) {
+      console.log("🔍 Auto-discovery enabled: will search for X users after research");
+    }
+
+    // Get existing teams to avoid duplicates
+    const existingTeams = db.prepare("SELECT team_name FROM targets").all().map(t => t.team_name);
+    console.log(`📋 Found ${existingTeams.length} existing teams in database`);
+
+    // Fetch real project data from AlphaGrowth and DeFiLlama
+    console.log("📊 Fetching project data from AlphaGrowth and DeFiLlama...");
+    let projectsContext = "";
+
+    try {
+      const [alphaGrowthProjects, defiLlamaFees] = await Promise.all([
+        fetch("https://alphagrowth.io/projects").then(r => r.text()).catch(() => null),
+        fetch("https://defillama.com/fees").then(r => r.text()).catch(() => null)
+      ]);
+
+      if (alphaGrowthProjects || defiLlamaFees) {
+        projectsContext = `\n\nI've fetched real project data for you to analyze:\n\n`;
+
+        if (alphaGrowthProjects) {
+          projectsContext += `AlphaGrowth Projects (excerpt):\n${alphaGrowthProjects.substring(0, 10000)}\n\n`;
+        }
+
+        if (defiLlamaFees) {
+          projectsContext += `DeFiLlama Top Revenue Projects (excerpt):\n${defiLlamaFees.substring(0, 10000)}\n\n`;
+        }
+
+        console.log("✅ Fetched external project data");
+      }
+    } catch (fetchError) {
+      console.log("⚠️ Failed to fetch external project data:", fetchError.message);
+    }
+
+    // Add existing teams to context so Claude avoids them
+    const existingTeamsContext = existingTeams.length > 0
+      ? `\n\nEXISTING TEAMS TO AVOID (do not include any of these):\n${existingTeams.join(", ")}\n\n`
+      : "";
+
+    const researchPrompt = `Find 15-20 web3/crypto companies that meet ALL of these criteria:
+- Raised at least $10M in total funding
+- Generating at least $1M in monthly revenue (or have strong revenue metrics)
+- Active and well-known in 2024-2026
+
+Search for top and trending DeFi protocols, Wallets, NFT platforms, gaming projects, etc. within web3 that Alchemy, the infrastructure company can support. Focus on applications and protocols that would benefit from blockchain infrastructure services.
+
+DO NOT include L1/L2 chains or infrastructure companies themselves.
+
+CRITICAL: Find NEW and DIFFERENT companies. Look for emerging projects, rising protocols, and growing platforms. Don't just return the most obvious choices.${existingTeamsContext}
+
+IMPORTANT: You MUST respond with ONLY a valid JSON array. Do not include any text before or after the JSON.
+
+Format (copy this structure exactly):
+[
+  {
+    "team_name": "Uniswap",
+    "raised_usd": 165000000,
+    "monthly_revenue_usd": 15000000,
+    "x_handle": "uniswap",
+    "website": "https://uniswap.org",
+    "notes": "Leading DEX protocol"
+  }
+]
+
+Include 15-20 companies. Focus on DeFi protocols (DEXs, lending, derivatives), wallet companies, NFT platforms, gaming projects, and other web3 applications that use blockchain infrastructure.${projectsContext}`;
+
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 4000,
+      system: "You are a research assistant. Always respond with valid JSON only, no additional text.",
+      tools: [{
+        type: "web_search_20250305",
+        name: "web_search"
+      }],
+      messages: [{ role: "user", content: researchPrompt }]
+    });
+
+    console.log("📊 Claude research complete, parsing results...");
+    
+    let responseText = "";
+    for (const block of msg.content) {
+      if (block.type === "text") {
+        responseText += block.text;
+      }
+    }
+    
+    console.log("Raw response:", responseText.substring(0, 500));
+    
+    // Try to extract and clean JSON
+    let teams = [];
+    
+    // Remove markdown code blocks if present
+    let cleanText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    
+    // Try to find JSON array
+    const jsonMatch = cleanText.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      try {
+        teams = JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error("Failed to parse JSON:", e);
+        console.error("Attempted to parse:", jsonMatch[0].substring(0, 200));
+        return res.status(500).json({ 
+          error: "Failed to parse Claude's response as JSON",
+          details: e.message,
+          sample: jsonMatch[0].substring(0, 200)
+        });
+      }
+    } else {
+      console.error("No JSON array found in response");
+      return res.status(500).json({ 
+        error: "No JSON array found in Claude's response",
+        sample: cleanText.substring(0, 300)
+      });
+    }
+
+    if (!Array.isArray(teams)) {
+      return res.status(500).json({ error: "Response is not an array" });
+    }
+
+    if (teams.length === 0) {
+      return res.status(500).json({ error: "No teams found in response" });
+    }
+
+    console.log(`Found ${teams.length} teams from research`);
+
+    let inserted = 0;
+    let skipped = 0;
+    const ins = db.prepare(`INSERT INTO targets (id, team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website, notes, sources_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`);
+    const ts = nowISO();
+
+    for (const raw of teams) {
+      const norm = {
+        team_name: raw?.team_name ? String(raw.team_name).trim() : "",
+        raised_usd: Number(raw?.raised_usd),
+        monthly_revenue_usd: Number(raw?.monthly_revenue_usd),
+        is_web3: 1,
+        x_handle: raw?.x_handle ? String(raw.x_handle).replace("@", "").trim() : null,
+        website: raw?.website ? String(raw.website).trim() : null,
+        notes: raw?.notes ? String(raw.notes) : null,
+        sources_json: JSON.stringify({ source: "claude_research", date: ts }),
+      };
+
+      if (!norm.team_name) { skipped++; continue; }
+      if (!qualifiesTarget(norm)) { skipped++; continue; }
+
+      // Check if team already exists (by name, x_handle, or website)
+      const existingCheck = db.prepare(`
+        SELECT id FROM targets
+        WHERE LOWER(TRIM(team_name)) = LOWER(TRIM(?))
+        OR (? IS NOT NULL AND LOWER(TRIM(x_handle)) = LOWER(TRIM(?)))
+        OR (? IS NOT NULL AND LOWER(TRIM(website)) = LOWER(TRIM(?)))
+        LIMIT 1
+      `).get(norm.team_name, norm.x_handle, norm.x_handle, norm.website, norm.website);
+
+      if (existingCheck) {
+        console.log(`⚠️ Skipped duplicate: ${norm.team_name} (already exists in database)`);
+        skipped++;
+        continue;
+      }
+
+      try {
+        ins.run(nanoid(), norm.team_name, Math.trunc(norm.raised_usd), Math.trunc(norm.monthly_revenue_usd), norm.is_web3, norm.x_handle, norm.website, norm.notes, norm.sources_json, ts, ts);
+        inserted++;
+        console.log(`✅ Imported: ${norm.team_name}${norm.x_handle ? ' (@' + norm.x_handle + ')' : ''}${norm.website ? ' - ' + norm.website : ''}`);
+      } catch (e) {
+        console.log(`⚠️ Skipped duplicate (insert error): ${norm.team_name}`);
+        skipped++;
+      }
+    }
+
+    console.log(`✅ Research complete: ${inserted} imported, ${skipped} skipped`);
+
+    // Auto-discover X users if enabled
+    if (auto_discover_x_users && inserted > 0) {
+      console.log("🔍 Starting auto-discovery of X users for imported teams...");
+
+      // Get all inserted teams with x_handle
+      const teamsWithXHandle = teams
+        .filter(t => t.x_handle && qualifiesTarget({ ...t, is_web3: 1 }))
+        .slice(0, 10); // Limit to 10 teams to avoid overwhelming
+
+      if (teamsWithXHandle.length > 0) {
+        console.log(`🔍 Will discover users for ${teamsWithXHandle.length} teams`);
+
+        // Start discovery workflows in background
+        // Don't await - let them run async to not block the response
+        Promise.all(
+          teamsWithXHandle.map(async (team) => {
+            try {
+              // Find the target ID we just created
+              const target = db.prepare("SELECT id FROM targets WHERE team_name = ? ORDER BY created_at DESC LIMIT 1").get(team.team_name);
+
+              if (target) {
+                console.log(`🔍 Starting discovery for ${team.team_name} (@${team.x_handle})`);
+                await workflowEngine.executeXDiscovery({
+                  x_handle: team.x_handle,
+                  target_id: target.id,
+                  max_users: Number(max_users_per_team) || 5,
+                });
+              }
+            } catch (error) {
+              console.error(`❌ Discovery failed for ${team.team_name}:`, error.message);
+            }
+          })
+        ).then(() => {
+          console.log("✅ Auto-discovery workflows completed");
+        }).catch((error) => {
+          console.error("❌ Auto-discovery error:", error);
+        });
+
+        // Return immediately with discovery status
+        return res.json({
+          ok: true,
+          found: teams.length,
+          inserted,
+          skipped,
+          auto_discovery: {
+            enabled: true,
+            teams_queued: teamsWithXHandle.length,
+            max_users_per_team: Number(max_users_per_team) || 5,
+            message: "X user discovery running in background. Check contacts and queue in a few minutes.",
+          },
+        });
+      } else {
+        console.log("ℹ️ No teams with X handles to discover users from");
+      }
+    }
+
+    res.json({ ok: true, found: teams.length, inserted, skipped });
+
+  } catch (e) {
+    console.error("Research error:", e);
+    res.status(500).json({ error: "Research failed", message: e.message, details: e.toString() });
+  }
+});
+
+app.post("/api/targets/import", (req, res) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items : null;
+  if (!items) return res.status(400).json({ error: "items must be an array" });
+  let inserted = 0;
+  let skipped = 0;
+  const ins = db.prepare(`INSERT INTO targets (id, team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website, notes, sources_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`);
+  const ts = nowISO();
+  for (const raw of items) {
+    const norm = {
+      team_name: raw?.team_name ? String(raw.team_name).trim() : "",
+      raised_usd: Number(raw?.raised_usd),
+      monthly_revenue_usd: Number(raw?.monthly_revenue_usd),
+      is_web3: (raw?.is_web3 === 1 || raw?.is_web3 === true || raw?.is_web3 === "1" || raw?.is_web3 === "true") ? 1 : 0,
+      x_handle: raw?.x_handle ? String(raw.x_handle).replace("@", "").trim() : null,
+      website: raw?.website ? String(raw.website).trim() : null,
+      notes: raw?.notes ? String(raw.notes) : null,
+      sources_json: raw?.sources ? JSON.stringify(raw.sources) : (raw?.sources_json || null),
+    };
+    if (!norm.team_name) { skipped++; continue; }
+    if (!qualifiesTarget(norm)) { skipped++; continue; }
+    try {
+      ins.run(nanoid(), norm.team_name, Math.trunc(norm.raised_usd), Math.trunc(norm.monthly_revenue_usd), norm.is_web3, norm.x_handle, norm.website, norm.notes, norm.sources_json, ts, ts);
+      inserted++;
+    } catch (e) {
+      skipped++;
+    }
+  }
+  res.json({ ok: true, inserted, skipped });
+});
+
+app.post("/api/targets/:id/dismiss", (req, res) => {
+  const { id } = req.params;
+  const info = db.prepare(`UPDATE targets SET status = 'dismissed', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+  if (info.changes === 0) return res.status(404).json({ error: "target not found" });
+  res.json({ ok: true });
+});
+
+app.get("/api/health/claude", async (req, res) => {
+  try {
+    const msg = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 12,
+      system: "Respond with exactly: ok",
+      messages: [{ role: "user", content: "say ok" }],
+    });
+    res.json({ ok: true, sample: msg.content?.[0]?.text || null });
+  } catch (e) {
+    console.error("claude health error:", e?.status, e?.name, e?.message);
+    res.status(500).json({ ok: false, status: e?.status, name: e?.name, message: e?.message });
+  }
+});
+
+app.post("/api/contacts", (req, res) => {
+  const { name, company, title, telegram_handle, notes } = req.body;
+  if (!name) return res.status(400).json({ error: "name is required" });
+  if (!company) return res.status(400).json({ error: "company is required" });
+  const id = nanoid();
+  db.prepare(`INSERT INTO contacts (id, name, company, title, telegram_handle, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, name, company || null, title || null, telegram_handle || null, notes || null, nowISO());
+  res.json({ id });
+});
+
+app.post("/api/drafts/generate", async (req, res) => {
+  try {
+    const { contact_id } = req.body;
+    if (!contact_id) return res.status(400).json({ error: "contact_id is required" });
+    const contact = db.prepare("SELECT * FROM contacts WHERE id = ?").get(contact_id);
+    if (!contact) return res.status(404).json({ error: "contact not found" });
+    const message_text = await generateOutbound(contact);
+    const id = nanoid();
+    const ts = nowISO();
+    db.prepare(`INSERT INTO drafts (id, contact_id, channel, message_text, status, prepared_at, created_at, updated_at) VALUES (?, ?, 'telegram', ?, 'queued', NULL, ?, ?)`).run(id, contact_id, message_text, ts, ts);
+    res.json({ id, message_text });
+  } catch (e) {
+    console.error("generate draft error:", e?.status, e?.name, e?.message);
+    res.status(500).json({ error: "failed to generate draft", status: e?.status, name: e?.name, message: e?.message });
+  }
+});
+
+app.get("/api/drafts/followups", (req, res) => {
+  const rows = db.prepare(`SELECT d.*, c.name, c.company, c.title, c.telegram_handle FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.status = 'followup' ORDER BY d.updated_at DESC LIMIT 50`).all();
+  res.json(rows.map((r) => ({ ...r, tg: tgLinks(r.telegram_handle) })));
+});
+
+app.get("/api/drafts/sent", (req, res) => {
+  const rows = db.prepare(`SELECT d.*, c.name, c.company, c.title, c.telegram_handle FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.status = 'sent' ORDER BY d.updated_at DESC LIMIT 50`).all();
+  res.json(rows.map((r) => ({ ...r, tg: tgLinks(r.telegram_handle) })));
+});
+
+app.get("/api/queue", (req, res) => {
+  const rows = db.prepare(`SELECT d.*, c.name, c.company, c.title, c.telegram_handle FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.status IN ('queued','approved') ORDER BY d.created_at ASC`).all();
+  res.json(rows.map((r) => ({ ...r, tg: tgLinks(r.telegram_handle) })));
+});
+
+app.post("/api/drafts/:id/update", (req, res) => {
+  const { id } = req.params;
+  const { message_text } = req.body;
+  if (!message_text) return res.status(400).json({ error: "message_text is required" });
+  const info = db.prepare(`UPDATE drafts SET message_text = ?, updated_at = ? WHERE id = ?`).run(message_text, nowISO(), id);
+  if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
+  res.json({ ok: true });
+});
+
+app.post("/api/drafts/:id/approve", (req, res) => {
+  const { id } = req.params;
+  const info = db.prepare(`UPDATE drafts SET status = 'approved', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+  if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
+  res.json({ ok: true });
+});
+
+app.post("/api/drafts/:id/approve-open-telegram", async (req, res) => {
+  try {
+    if (process.platform !== "darwin") return res.status(400).json({ error: "Telegram automation only on macOS" });
+    const { id } = req.params;
+    const overrideText = (req.body && typeof req.body.message_text === "string") ? req.body.message_text : null;
+    const row = db.prepare(`SELECT d.*, c.telegram_handle, c.name, c.company FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.id = ?`).get(id);
+    if (!row) return res.status(404).json({ error: "draft not found" });
+    
+    // Mark as sent immediately (instead of just approved)
+    const info = db.prepare(`UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+    if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
+    
+    const textToSend = overrideText ?? row.message_text;
+    
+    // Append successful message to SDR style file
+    try {
+      const timestamp = new Date().toISOString().split('T')[0];
+      const entry = `\n\n--- Message sent ${timestamp} ---\nContact: ${row.name} at ${row.company}\nMessage:\n${textToSend}\n---`;
+      fs.appendFileSync(SDR_STYLE_FILE, entry, 'utf8');
+      console.log(`✅ Saved successful message to ${SDR_STYLE_FILE}`);
+    } catch (e) {
+      console.error("Failed to save message to style file:", e.message);
+      // Don't fail the request if file append fails
+    }
+    
+    setClipboardMac(textToSend);
+    openTelegramDesktopLink(row.telegram_handle);
+    await new Promise((r) => setTimeout(r, 700));
+    await pasteIntoTelegram();
+    scheduleTelegramAutoSend(id);
+    res.json({ ok: true, auto_send: AUTO_SEND_ENABLED, auto_send_after_seconds: AUTO_SEND_IDLE_SECONDS });
+  } catch (e) {
+    console.error("approve-open-telegram error:", e?.message || e, e?.stderr || "");
+    res.status(500).json({ error: "failed to open Telegram and paste", message: e?.message, stderr: e?.stderr });
+  }
+});
+
+app.post("/api/drafts/generate-followup", async (req, res) => {
+  try {
+    const { contact_name, company, original_message } = req.body;
+    if (!contact_name || !company || !original_message) {
+      return res.status(400).json({ error: "contact_name, company, and original_message are required" });
+    }
+    
+    console.log(`✍️ Generating follow-up for ${contact_name} at ${company}...`);
+    
+    const message_text = await generateFollowUp(contact_name, company, original_message);
+    
+    res.json({ message_text });
+  } catch (e) {
+    console.error("generate follow-up error:", e?.status, e?.name, e?.message);
+    res.status(500).json({ error: "failed to generate follow-up", status: e?.status, name: e?.name, message: e?.message });
+  }
+});
+
+app.post("/api/drafts/send-followup", async (req, res) => {
+  try {
+    if (process.platform !== "darwin") return res.status(400).json({ error: "Telegram automation only on macOS" });
+    
+    const { contact_id, telegram_handle, message_text, original_message, contact_name, company } = req.body;
+    
+    if (!telegram_handle || !message_text) {
+      return res.status(400).json({ error: "telegram_handle and message_text are required" });
+    }
+    
+    console.log(`📤 Sending follow-up to ${contact_name}...`);
+    
+    // Create a follow-up draft record in the database
+    const followUpId = nanoid();
+    const ts = nowISO();
+    db.prepare(`INSERT INTO drafts (id, contact_id, channel, message_text, status, prepared_at, created_at, updated_at) VALUES (?, ?, 'telegram', ?, 'followup', ?, ?, ?)`).run(
+      followUpId, 
+      contact_id, 
+      message_text, 
+      ts, 
+      ts, 
+      ts
+    );
+    
+    // Save to SDR style file
+    try {
+      const timestamp = new Date().toISOString().split('T')[0];
+      const entry = `\n\n--- Follow-up sent ${timestamp} ---\nContact: ${contact_name} at ${company}\nOriginal message:\n${original_message}\n\nFollow-up:\n${message_text}\n---`;
+      fs.appendFileSync(SDR_STYLE_FILE, entry, 'utf8');
+      console.log(`✅ Saved follow-up message to ${SDR_STYLE_FILE}`);
+    } catch (e) {
+      console.error("Failed to save follow-up to style file:", e.message);
+    }
+    
+    // Copy to clipboard
+    setClipboardMac(message_text);
+    
+    // Open Telegram
+    openTelegramDesktopLink(telegram_handle);
+    await new Promise((r) => setTimeout(r, 700));
+    
+    // Paste
+    await pasteIntoTelegram();
+    
+    // Schedule auto-send
+    scheduleTelegramAutoSend(followUpId);
+    
+    res.json({ ok: true, auto_send: AUTO_SEND_ENABLED, auto_send_after_seconds: AUTO_SEND_IDLE_SECONDS });
+    
+  } catch (e) {
+    console.error("send-followup error:", e?.message || e, e?.stderr || "");
+    res.status(500).json({ error: "failed to send follow-up", message: e?.message, stderr: e?.stderr });
+  }
+});
+
+app.post("/api/drafts/:id/mark-sent", (req, res) => {
+  const { id } = req.params;
+  cancelTelegramAutoSend(id);
+  const info = db.prepare(`UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+  if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
+  res.json({ ok: true });
+});
+
+app.post("/api/drafts/:id/skip", (req, res) => {
+  const { id } = req.params;
+  cancelTelegramAutoSend(id);
+  const info = db.prepare(`UPDATE drafts SET status = 'skipped', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+  if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
+  res.json({ ok: true });
+});
+
+// Initialize WorkflowEngine
+const workflowEngine = new WorkflowEngine(db, anthropic, generateOutbound, nowISO, nanoid);
+
+// Mount workflow routes (must come BEFORE other target routes)
+app.use("/api/workflow", createWorkflowRoutes(workflowEngine));
+
+// Note: createTargetRoutes adds routes to /api/targets/:id/discover-x-users
+// This must be registered AFTER other /api/targets routes to avoid conflicts
+const targetDiscoveryRouter = createTargetRoutes(db, workflowEngine, anthropic, nanoid, nowISO, qualifiesTarget);
+app.use("/api/targets", targetDiscoveryRouter);
+
+(async () => {
+  // Fetch Alchemy Data API documentation
+  let ALCHEMY_DATA_INFO = "";
+  try {
+    console.log("🔍 Fetching Alchemy Data API documentation...");
+    const response = await fetch("https://alchemy.com/docs/data.md");
+    if (response.ok) {
+      ALCHEMY_DATA_INFO = await response.text();
+      console.log("📘 Loaded Alchemy Data API documentation");
+      
+      // Save to cache for offline use
+      try {
+        fs.writeFileSync(path.join(process.cwd(), "alchemy_data_cache.md"), ALCHEMY_DATA_INFO, "utf8");
+      } catch (e) {
+        // Ignore cache errors
+      }
+    } else {
+      throw new Error(`HTTP ${response.status}`);
+    }
+  } catch (e) {
+    console.warn("⚠️ Could not fetch Data API docs:", e.message);
+    // Try loading from cache
+    try {
+      ALCHEMY_DATA_INFO = fs.readFileSync(path.join(process.cwd(), "alchemy_data_cache.md"), "utf8");
+      console.log("📘 Loaded Data API docs from cache");
+    } catch (e2) {
+      console.warn("⚠️ No cached Data API docs available");
+    }
+  }
+
+  // Fetch Alchemy Node API documentation
+  let ALCHEMY_NODE_INFO = "";
+  try {
+    console.log("🔍 Fetching Alchemy Node API documentation...");
+    const response = await fetch("https://alchemy.com/docs/node.md");
+    if (response.ok) {
+      ALCHEMY_NODE_INFO = await response.text();
+      console.log("📘 Loaded Alchemy Node API documentation");
+      
+      // Save to cache for offline use
+      try {
+        fs.writeFileSync(path.join(process.cwd(), "alchemy_node_cache.md"), ALCHEMY_NODE_INFO, "utf8");
+      } catch (e) {
+        // Ignore cache errors
+      }
+    } else {
+      throw new Error(`HTTP ${response.status}`);
+    }
+  } catch (e) {
+    console.warn("⚠️ Could not fetch Node API docs:", e.message);
+    // Try loading from cache
+    try {
+      ALCHEMY_NODE_INFO = fs.readFileSync(path.join(process.cwd(), "alchemy_node_cache.md"), "utf8");
+      console.log("📘 Loaded Node API docs from cache");
+    } catch (e2) {
+      console.warn("⚠️ No cached Node API docs available");
+    }
+  }
+
+  // Make available globally
+  global.ALCHEMY_DATA_INFO = ALCHEMY_DATA_INFO;
+  global.ALCHEMY_NODE_INFO = ALCHEMY_NODE_INFO;
+
+  const port = Number(process.env.PORT || 3000);
+  app.listen(port, () => {
+    console.log(`✅ Console running at http://localhost:${port}`);
+  });
+})();

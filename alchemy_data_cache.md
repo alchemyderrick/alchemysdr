@@ -1,0 +1,152 @@
+# Data APIs Overview
+
+> Use Alchemy Data to build and scale your business
+
+The Data APIs give you fast, reliable access to blockchain data without running your own indexing infrastructure. Whether you're building wallets, NFT platforms, analytics dashboards, or DeFi apps, the Data APIs save you time and engineering costs by offering pre-transformed, production-ready data.
+
+## Components of the Data APIs
+
+<CardGroup cols={3}>
+  <Card title="Portfolio API" icon="fa-solid fa-chart-pie" href="/docs/reference/portfolio-apis">
+    Build a complete portfolio view of a user’s wallet, across tokens and NFTs.
+  </Card>
+
+  <Card title="Token API" icon="fa-solid fa-coins" href="/docs/reference/token-api-quickstart">
+    Easily request information about specific tokens like metadata or wallet balances.
+  </Card>
+
+  <Card title="Transfers API" icon="fa-solid fa-arrow-right-arrow-left" href="/docs/reference/transfers-api-quickstart">
+    Fetch historical transactions for any address in one request.
+  </Card>
+
+  <Card title="Prices API" icon="fa-solid fa-chart-line" href="/docs/reference/prices-api-quickstart">
+    Access real-time and historical prices for tokens.
+  </Card>
+
+  <Card title="NFT API" icon="fa-solid fa-image" href="/docs/reference/nft-api-quickstart">
+    Instantly find, verify, and display any NFT, across all major blockchains.
+  </Card>
+
+  <Card title="Webhooks" icon="fa-solid fa-bell" href="/docs/reference/notify-api-quickstart">
+    Subscribe to on-chain events like transfers, transactions, and balance changes.
+  </Card>
+
+  <Card title="Simulation API" icon="fa-solid fa-flask" href="/docs/reference/simulation">
+    Simulate a transaction and see its potential effects before you send it.
+  </Card>
+
+  <Card title="Utility API" icon="fa-solid fa-screwdriver-wrench" href="/docs/reference/utility-api-overview">
+    Enhanced APIs to get blocks by timestamp and transaction receipts.
+  </Card>
+</CardGroup>
+
+***
+
+## When Should I Use the Data APIs?
+
+Use the Data APIs if:
+
+* You need pre-indexed blockchain data without running your own nodes or infrastructure.
+* You want to read user portfolios, token balances, transfer history, or NFT data.
+* You're sending transactions and **not** using Alchemy's Smart Wallets.
+  * If you are using our wallets, check out the Wallet APIs, which supports:
+    * `sendUserOp`
+    * `estimateUserOpGas`
+    * and more account abstraction features
+* You want to simulate or estimate transaction outcomes before sending them.
+* You need to track wallet or contract activity with push notifications via Webhooks.
+
+***
+
+## Data APIs Use Cases
+
+### 1. Developer Tooling & Debugging
+
+Perfect for advanced dev environments, simulation dashboards, and infra teams.
+
+* Use endpoints like:
+  * `debug_traceTransaction`
+  * `debug_getRawTrace`
+
+### 2. Help Users *Write* Transactions
+
+Ideal for apps that generate transactions on behalf of users.
+
+**Common use cases:**
+
+* ERC-20 swaps
+* NFT purchases and listings
+* Wallets that send tokens or interact with contracts
+* Portfolio apps that need to simulate or batch transactions
+
+### 3. Help Users *Read* Transactions
+
+**Common use cases:**
+
+* Wallets and portfolio trackers
+
+* Token/NFT ownership queries
+
+* Historical transfers and analytics dashboards
+
+* Price feeds and on-chain trends
+
+* Pre-indexed data to power all your frontend and backend logic
+
+* Use endpoints like:
+  * `getNftsForOwner` - Retrieves all NFTs currently owned by a specified address.
+  * `alchemy_getTokenBalances` - Returns ERC-20 token balances for a given address.
+  * `alchemy_getAssetTransfers` - Fetches historical transactions for any address across Ethereum and supported L2s including Polygon, Arbitrum, and Optimism.
+
+***
+
+## Summary
+
+The Data APIs are specifically meant to do the heavy lifting so that you can focus on your product needs.
+
+We are not just the data provider, but also the infra layer behind the biggest names in web3. Alchemy is set apart by:
+
+* **Battle-tested scale**: powering millions of wallets, swaps, and NFT marketplaces — from Fortune 500s to weekend and hackathon builders.
+* **Multi-chain support**: Ethereum, Base, Polygon, Arbitrum, Optimism, and dozens of other chains supported out of the box.
+
+***
+
+## Quick Reference
+
+### Token, NFT, and Prices APIs
+
+<CardGroup cols={3}>
+  <Card title="Token API" icon="fa-solid fa-coins" href="/docs/reference/token-api-quickstart">
+    **Ideal for:** Multi-chain token experiences, balance indexing
+
+    **How it works:** Simply call an API to return multi-chain and complete token data
+  </Card>
+
+  <Card title="NFT API" icon="fa-solid fa-image" href="/docs/reference/nft-api-quickstart">
+    **Ideal for:** NFT drops, token gating, analytics, wallets, marketplaces
+
+    **How it works:** Simply call an API to return multi-chain and complete NFT data
+  </Card>
+
+  <Card title="Prices API" icon="fa-solid fa-chart-line" href="/docs/reference/prices-api-quickstart">
+    **Ideal for:** Multi-chain token experiences, trading apps, wallets
+
+    **How it works:** Simply call an API to return multi-chain and complete token prices data
+  </Card>
+</CardGroup>
+
+### Webhooks
+
+<CardGroup cols={2}>
+  <Card title="Webhooks" icon="fa-solid fa-bell" href="/docs/reference/notify-api-quickstart">
+    **Ideal for:** Push notifications, wallets, consumer facing apps
+
+    **How it works:** Define your Webhook and start receiving relevant events
+  </Card>
+
+  <Card title="Custom Webhooks" icon="fa-solid fa-code" href="/docs/reference/custom-webhooks-quickstart">
+    **Ideal for:** Infinite customization, specific data needs, multi-chain apps
+
+    **How it works:** Customize your event to your exact needs and immediately receive them
+  </Card>
+</CardGroup>

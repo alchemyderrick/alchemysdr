@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sqlite3:*)",
+      "Bash(ls:*)",
+      "WebSearch",
+      "Bash(npm install:*)",
+      "Bash(kill:*)",
+      "Bash(curl:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(pkill:*)",
+      "Bash(node server.js:*)",
+      "Bash(chmod:*)",
+      "Bash(python3:*)",
+      "WebFetch(domain:university.clay.com)",
+      "WebFetch(domain:alchemy.com)",
+      "WebFetch(domain:www.alchemy.com)"
+    ]
+  }
+}
