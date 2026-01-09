@@ -57,8 +57,8 @@ export function AddContactCard({ onRefresh }: AddContactCardProps) {
         <CardDescription>Create a new contact and generate an outreach draft</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="name">Name *</Label>
               <Input
@@ -95,14 +95,14 @@ export function AddContactCard({ onRefresh }: AddContactCardProps) {
             <Label htmlFor="notes">Notes / Angle</Label>
             <Textarea
               id="notes"
-              placeholder="Funding, hiring, chain pain points, infrastructure challenges..."
+              placeholder="Funding, hiring, chain pain points..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="min-h-[80px] resize-none"
+              className="min-h-[60px] resize-none"
             />
           </div>
 
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-2">
             <Button type="submit" disabled={loading} className="flex-1">
               {loading ? (
                 <>

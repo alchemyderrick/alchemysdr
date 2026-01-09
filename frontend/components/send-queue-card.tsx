@@ -66,7 +66,7 @@ export function SendQueueCard() {
         <CardDescription>Generated outreach messages awaiting approval</CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
-        <ScrollArea className="h-[400px]">
+        <ScrollArea className="h-[200px]">
           {loading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (

@@ -42,7 +42,7 @@ export function DiscoverXCard() {
         <CardDescription>Find potential leads from a company's X followers</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={(e) => { e.preventDefault(); handleDiscover(); }} className="space-y-4">
+        <form onSubmit={(e) => { e.preventDefault(); handleDiscover(); }} className="space-y-3">
           <div className="space-y-2">
             <Label htmlFor="x-handle">Company X Handle</Label>
             <Input

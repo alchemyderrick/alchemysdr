@@ -44,7 +44,7 @@ export default function HomePage() {
   return (
     <div className="p-10 max-w-7xl mx-auto w-full">
       {/* Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <StatCard
           icon="📨"
           label="Messages Sent"
@@ -60,15 +60,11 @@ export default function HomePage() {
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="flex flex-col gap-6">
-          <AddContactCard onRefresh={loadStats} />
-          <SendQueueCard />
-        </div>
-        <div className="flex flex-col gap-6">
-          <DiscoverXCard />
-          <SentMessagesCard />
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <AddContactCard onRefresh={loadStats} />
+        <SendQueueCard />
+        <DiscoverXCard />
+        <SentMessagesCard />
       </div>
     </div>
   )
