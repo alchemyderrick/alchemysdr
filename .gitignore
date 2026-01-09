@@ -25,3 +25,5 @@ npm-debug.log*
 .vscode/
 .idea/
 .claude/
+RENDER_SETUP.txt
+RAILWAY_SETUP.txt
