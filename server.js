@@ -933,18 +933,28 @@ app.post("/api/relayer/mark-prepared/:id", authenticateRelayer, (req, res) => {
   const { id } = req.params;
 
   try {
+    // Get the current status to preserve follow-up status
+    const draft = db.prepare(`SELECT status FROM drafts WHERE id = ?`).get(id);
+
+    if (!draft) {
+      return res.status(404).json({ error: "Draft not found" });
+    }
+
+    // Keep 'followup' status, change 'approved' to 'sent'
+    const newStatus = draft.status === 'followup' ? 'followup' : 'sent';
+
     const info = db.prepare(`
       UPDATE drafts
-      SET prepared_at = ?, updated_at = ?, status = 'sent'
+      SET prepared_at = ?, updated_at = ?, status = ?
       WHERE id = ?
-    `).run(nowISO(), nowISO(), id);
+    `).run(nowISO(), nowISO(), newStatus, id);
 
     if (info.changes === 0) {
       return res.status(404).json({ error: "Draft not found" });
     }
 
-    console.log(`✅ Relayer marked draft ${id} as sent`);
-    res.json({ ok: true, message: "Draft marked as sent" });
+    console.log(`✅ Relayer marked draft ${id} as ${newStatus}`);
+    res.json({ ok: true, message: `Draft marked as ${newStatus}` });
   } catch (e) {
     console.error("relayer/mark-prepared error:", e);
     res.status(500).json({ error: "Failed to mark draft as prepared", message: e.message });
