@@ -21,6 +21,7 @@
     "@anthropic-ai/sdk": "^0.71.2",
     "better-sqlite3": "^12.5.0",
     "clipboardy": "^5.0.2",
+    "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "nanoid": "^5.1.6",

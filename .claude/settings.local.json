@@ -23,7 +23,9 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(openssl rand:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(npm run relayer:*)",
+      "Bash(gh api:*)"
     ]
   }
 }

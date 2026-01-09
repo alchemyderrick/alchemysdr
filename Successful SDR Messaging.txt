@@ -330,3 +330,79 @@ Hey Eshan, congrats on the success over at Opensea!
 
 Yes, Opensea could use Alchemy's Node API to power their Solana infrastructure. Our recent Solana architecture revamp has enabled up to 5x lower latency and 90k+ RPS throughput for teams like you. Would you be open to a quick call to discuss how Alchemy could potentially support Opensea's scaling needs?
 ---
+
+--- Follow-up sent 2026-01-09 ---
+Contact: Eshan at Opensea
+Original message:
+Hey Eshan, congrats on the success over at Opensea!
+
+I noticed you might be facing some infrastructure challenges on the Solana side. Would you be free for a quick 15-minute call next week to discuss how Alchemy's recent Solana architecture revamp could potentially help?
+
+Follow-up:
+Hey Eshan,
+
+Just circling back on our Solana infrastructure discussion. Curious if you had any thoughts or if there's anything I can provide to help? Let me know what works best for you.
+---
+
+--- Message sent 2026-01-09 ---
+Contact: Eshan at Alchemy
+Message:
+Hey Eshan, congrats on the success over at Alchemy!
+
+I noticed you might be facing some infrastructure challenges on the node side. Would you be open to a quick call to discuss how Alchemy's recent Cortex architecture revamp could potentially help improve your node reliability and performance?
+---
+
+--- Message sent 2026-01-09 ---
+Contact: Eshan at Opensea
+Message:
+Hey Eshan, congrats on the success over at Opensea!
+
+I noticed you might be facing some infrastructure challenges, particularly around your Solana node setup. Our team at Alchemy recently revamped our Solana architecture, enabling up to 5x lower latency and 90k+ RPS throughput. 
+
+Would you be open to a quick call to discuss how our Solana Node API could help improve the reliability and performance of your Opensea Solana infrastructure?
+---
+
+--- Follow-up sent 2026-01-09 ---
+Contact: Eshan at Opensea
+Original message:
+Hey Eshan, congrats on the success over at Opensea!
+
+I noticed you might be facing some infrastructure challenges, particularly around your Solana node setup. Our team at Alchemy recently revamped our Solana architecture, enabling up to 5x lower latency and 90k+ RPS throughput. 
+
+Would you be open to a quick call to discuss how our Solana Node API could help improve the reliability and performance of your Opensea Solana infrastructure?
+
+Follow-up:
+Hey Eshan, just circling back on our Solana infrastructure discussion. Curious if you had a chance to review and let me know if there's anything I can provide to help out. Whenever you're free, I'd be happy to walk through the details.
+---
+
+--- Follow-up sent 2026-01-09 ---
+Contact: Brian | Alchemy at Alchemy
+Original message:
+Hey Brian, congrats on the success over at Alchemy!
+
+I noticed you're the biz dev lead there - I'd love to learn more about how Alchemy is helping teams scale their blockchain infrastructure. Would you be open to a quick call to discuss how our new Cortex architecture could potentially benefit your customers?
+
+Follow-up:
+Hey Brian,
+
+Just circling back on our Cortex chat - curious if you had any thoughts on how it could potentially benefit your team? Let me know what works best for you.
+---
+
+--- Follow-up sent 2026-01-09 ---
+Contact: Glenn | Alchemy at Alchemy
+Original message:
+Hey Glenn, congrats on the success over at Alchemy!
+
+I noticed you're a long-time crypto builder and advisor. I'd love to learn more about the work you're doing to support emerging web3 projects. Do you have any thoughts on how Alchemy's comprehensive blockchain infrastructure could help power your initiatives?
+
+Follow-up:
+Hey Glenn, just circling back on our previous chat. Curious if you had any thoughts or if there's anything else I can provide to help? Let me know what works best for you.
+---
+
+--- Message sent 2026-01-09 ---
+Contact: dfinzer.eth | opensea at OpenSea
+Message:
+Hey dfinzer.eth, congrats on the success over at OpenSea!
+
+I noticed OpenSea is building on Solana - our team recently revamped our Solana infrastructure, enabling up to 5x lower latency and 90k+ RPS throughput. Would you be open to a quick chat about how Alchemy's Node API could help improve the reliability and performance of OpenSea's Solana deployment?
+---

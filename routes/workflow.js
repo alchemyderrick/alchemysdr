@@ -18,9 +18,13 @@ export function createWorkflowRoutes(workflowEngine) {
 
       console.log(`[API] Starting X discovery for @${x_handle}`);
 
+      // Get session ID for user-specific cookies
+      const sessionId = req.cookies?.session_id || req.headers['x-session-id'];
+
       const result = await workflowEngine.executeXDiscovery({
         x_handle: x_handle.trim(),
         max_users: Number(max_users) || 5,
+        sessionId: sessionId, // Pass sessionId for user-specific cookies
       });
 
       res.json(result);
