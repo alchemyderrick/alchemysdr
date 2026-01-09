@@ -54,15 +54,8 @@ export function DiscoverXCard() {
             />
           </div>
 
-          {/* Spacer divs to match Add Contact card height */}
-          <div className="space-y-1">
-            <div className="h-[18px]"></div>
-            <div className="h-8"></div>
-          </div>
-          <div className="space-y-1">
-            <div className="h-[18px]"></div>
-            <div className="h-[50px]"></div>
-          </div>
+          {/* Spacer to match Add Contact card height - accounts for 3 additional fields */}
+          <div className="h-[142px]"></div>
 
           <Button type="submit" disabled={loading} className="w-full h-8 text-sm">
             {loading ? (
