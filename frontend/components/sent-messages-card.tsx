@@ -115,13 +115,13 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
               {drafts.map((draft) => (
                 <div key={draft.id} className="border border-border/50 rounded-lg p-4 space-y-3 hover:border-success/30 transition-all bg-card/30">
                   <div className="flex items-center justify-between">
-                    <div className="font-semibold text-foreground">{draft.name}</div>
+                    <div className="font-semibold text-foreground">{draft.company}</div>
                     <Badge className="bg-success/10 text-success border-success/30 text-xs px-2 py-0.5">
                       sent
                     </Badge>
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {draft.company} • @{draft.telegram_handle}
+                    {draft.name} • @{draft.telegram_handle}
                   </div>
                   <Textarea
                     value={editedMessages[draft.id] ?? draft.message_text}
