@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: sdr-console
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && cd frontend && npm install && npm run build && cd ..
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20.9.0
+      - key: NODE_ENV
+        value: production
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: true
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/chromium-browser
