@@ -856,6 +856,33 @@ app.get("/api/health/claude", async (req, res) => {
   }
 });
 
+// Draft approval endpoint for relayer mode
+app.post("/api/drafts/:id/approve", (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Update draft to approved status, clear prepared_at so relayer can pick it up
+    const info = db.prepare(`
+      UPDATE drafts
+      SET status = 'approved',
+          approved_at = ?,
+          prepared_at = NULL,
+          updated_at = ?
+      WHERE id = ?
+    `).run(nowISO(), nowISO(), id);
+
+    if (info.changes === 0) {
+      return res.status(404).json({ error: "Draft not found" });
+    }
+
+    console.log(`✅ Draft ${id} approved for relayer`);
+    res.json({ ok: true, message: "Draft approved, relayer will process it" });
+  } catch (e) {
+    console.error("approve error:", e);
+    res.status(500).json({ error: "Failed to approve draft", message: e.message });
+  }
+});
+
 // Relayer authentication middleware
 function authenticateRelayer(req, res, next) {
   const relayerApiKey = process.env.RELAYER_API_KEY;
