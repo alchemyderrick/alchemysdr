@@ -41,9 +41,9 @@ export function DiscoverXCard() {
         <CardTitle className="text-base">Discover Users from X</CardTitle>
         <CardDescription className="text-xs">Find potential leads from a company's X followers</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1">
-        <form onSubmit={(e) => { e.preventDefault(); handleDiscover(); }} className="space-y-2 h-full flex flex-col">
-          <div className="space-y-1 flex-1">
+      <CardContent className="flex-1 overflow-auto">
+        <form onSubmit={(e) => { e.preventDefault(); handleDiscover(); }} className="space-y-2">
+          <div className="space-y-1">
             <Label htmlFor="x-handle" className="text-xs">Company X Handle</Label>
             <Input
               id="x-handle"
@@ -53,6 +53,17 @@ export function DiscoverXCard() {
               className="h-8 text-sm"
             />
           </div>
+
+          {/* Spacer divs to match Add Contact card height */}
+          <div className="space-y-1">
+            <div className="h-[18px]"></div>
+            <div className="h-8"></div>
+          </div>
+          <div className="space-y-1">
+            <div className="h-[18px]"></div>
+            <div className="h-[50px]"></div>
+          </div>
+
           <Button type="submit" disabled={loading} className="w-full h-8 text-sm">
             {loading ? (
               <>
