@@ -40,6 +40,8 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static files from current directory
 app.use(express.static(process.cwd()));
 
 // Initialize database
@@ -57,6 +59,18 @@ if (apolloApiKey) {
 
 // Serve main HTML UI
 app.get("/", (req, res) => {
+  // In production/Railway, redirect to React frontend if FRONTEND_URL is set
+  if ((process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) && process.env.FRONTEND_URL) {
+    return res.redirect(process.env.FRONTEND_URL);
+  }
+
+  // Otherwise serve HTML UI
+  res.setHeader("Content-Type", "text/html");
+  res.send(getHtmlTemplate());
+});
+
+// Serve HTML UI at /html route (always available as fallback)
+app.get("/html", (req, res) => {
   res.setHeader("Content-Type", "text/html");
   res.send(getHtmlTemplate());
 });

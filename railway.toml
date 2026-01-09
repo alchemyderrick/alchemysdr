@@ -1,3 +1,6 @@
+# Railway Backend Service Configuration
+# This deploys the Express API server
+
 [build]
 builder = "NIXPACKS"
 
@@ -10,6 +13,6 @@ restartPolicyMaxRetries = 10
 name = "sdr-console-backend"
 
 [services.healthcheck]
-path = "/"
+path = "/api/health/claude"
 timeout = 100
 interval = 30
