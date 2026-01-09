@@ -4,8 +4,14 @@ FROM node:18
 # Install system dependencies for Puppeteer and better-sqlite3
 RUN apt-get update && apt-get install -y \
     chromium \
+    chromium-sandbox \
     ca-certificates \
     fonts-liberation \
+    fonts-ipafont-gothic \
+    fonts-wqy-zenhei \
+    fonts-thai-tlwg \
+    fonts-kacst \
+    fonts-freefont-ttf \
     libappindicator3-1 \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -19,6 +25,8 @@ RUN apt-get update && apt-get install -y \
     libxcomposite1 \
     libxdamage1 \
     libxrandr2 \
+    libxss1 \
+    libxtst6 \
     xdg-utils \
     libgbm1 \
     python3 \
