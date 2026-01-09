@@ -1,11 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api-client'
 import { toast } from 'sonner'
+import { Search, Loader2 } from 'lucide-react'
 
 export function DiscoverXCard() {
   const [handle, setHandle] = useState('')
@@ -37,17 +39,33 @@ export function DiscoverXCard() {
     <Card>
       <CardHeader>
         <CardTitle>Discover Users from X</CardTitle>
+        <CardDescription>Find potential leads from a company's X followers</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <Input
-          placeholder="Company X handle (e.g., @alchemy)"
-          value={handle}
-          onChange={(e) => setHandle(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleDiscover()}
-        />
-        <Button onClick={handleDiscover} disabled={loading} className="w-full">
-          {loading ? 'Discovering...' : 'Discover Users'}
-        </Button>
+      <CardContent>
+        <form onSubmit={(e) => { e.preventDefault(); handleDiscover(); }} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="x-handle">Company X Handle</Label>
+            <Input
+              id="x-handle"
+              placeholder="@alchemy"
+              value={handle}
+              onChange={(e) => setHandle(e.target.value)}
+            />
+          </div>
+          <Button type="submit" disabled={loading} className="w-full">
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Discovering...
+              </>
+            ) : (
+              <>
+                <Search className="mr-2 h-4 w-4" />
+                Discover Users
+              </>
+            )}
+          </Button>
+        </form>
       </CardContent>
     </Card>
   )
