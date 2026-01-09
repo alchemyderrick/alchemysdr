@@ -856,6 +856,99 @@ app.get("/api/health/claude", async (req, res) => {
   }
 });
 
+// Relayer authentication middleware
+function authenticateRelayer(req, res, next) {
+  const relayerApiKey = process.env.RELAYER_API_KEY;
+
+  // Skip auth if no key configured (local development)
+  if (!relayerApiKey) {
+    return next();
+  }
+
+  const providedKey = req.headers['x-relayer-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
+
+  if (!providedKey || providedKey !== relayerApiKey) {
+    return res.status(401).json({ error: "Unauthorized: Invalid relayer API key" });
+  }
+
+  next();
+}
+
+// Relayer API endpoints
+app.get("/api/relayer/approved-pending", authenticateRelayer, (req, res) => {
+  try {
+    // Find approved drafts that haven't been prepared yet
+    const rows = db.prepare(`
+      SELECT
+        d.id,
+        d.message_text,
+        d.status,
+        d.updated_at,
+        c.id as contact_id,
+        c.name,
+        c.telegram_handle,
+        c.company
+      FROM drafts d
+      JOIN contacts c ON c.id = d.contact_id
+      WHERE d.status = 'approved'
+        AND (d.prepared_at IS NULL OR d.prepared_at = '')
+      ORDER BY d.updated_at DESC
+      LIMIT 50
+    `).all();
+
+    res.json({ ok: true, drafts: rows, count: rows.length });
+  } catch (e) {
+    console.error("relayer/approved-pending error:", e);
+    res.status(500).json({ error: "Failed to fetch pending drafts", message: e.message });
+  }
+});
+
+app.post("/api/relayer/mark-prepared/:id", authenticateRelayer, (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const info = db.prepare(`
+      UPDATE drafts
+      SET prepared_at = ?, updated_at = ?
+      WHERE id = ?
+    `).run(nowISO(), nowISO(), id);
+
+    if (info.changes === 0) {
+      return res.status(404).json({ error: "Draft not found" });
+    }
+
+    console.log(`✅ Relayer marked draft ${id} as prepared`);
+    res.json({ ok: true, message: "Draft marked as prepared" });
+  } catch (e) {
+    console.error("relayer/mark-prepared error:", e);
+    res.status(500).json({ error: "Failed to mark draft as prepared", message: e.message });
+  }
+});
+
+app.post("/api/relayer/mark-failed/:id", authenticateRelayer, (req, res) => {
+  const { id } = req.params;
+  const { error: errorMessage } = req.body;
+
+  try {
+    // Clear prepared_at to allow retry
+    const info = db.prepare(`
+      UPDATE drafts
+      SET prepared_at = NULL, updated_at = ?
+      WHERE id = ?
+    `).run(nowISO(), id);
+
+    if (info.changes === 0) {
+      return res.status(404).json({ error: "Draft not found" });
+    }
+
+    console.log(`⚠️ Relayer reported failure for draft ${id}: ${errorMessage || 'Unknown error'}`);
+    res.json({ ok: true, message: "Draft reset for retry" });
+  } catch (e) {
+    console.error("relayer/mark-failed error:", e);
+    res.status(500).json({ error: "Failed to mark draft as failed", message: e.message });
+  }
+});
+
 // Get draft queue (standalone route for backward compatibility)
 app.get("/api/queue", (req, res) => {
   const rows = db.prepare(

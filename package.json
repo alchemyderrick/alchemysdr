@@ -6,7 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "node server.js",
-    "runner": "node runner.js"
+    "runner": "node runner.js",
+    "start": "node server.js",
+    "relayer": "node relayer-client.js"
   },
   "keywords": [],
   "author": "",

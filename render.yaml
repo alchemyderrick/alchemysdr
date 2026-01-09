@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: sdr-console
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: RENDER
+        value: "true"
+      - key: DB_PATH
+        value: /opt/render/project/data/data.db
+      - key: PUPPETEER_USER_DATA_DIR
+        value: /opt/render/project/data/puppeteer-data
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: APOLLO_API_KEY
+        sync: false
+      - key: RELAYER_API_KEY
+        sync: false
+    disk:
+      name: data
+      mountPath: /opt/render/project/data
+      sizeGB: 1
