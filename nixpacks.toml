@@ -1,11 +1,12 @@
+# Nixpacks configuration for Railway
+# Node.js version is detected from .nvmrc file
+
 [phases.setup]
-nixPkgs = ["nodejs-20_x", "chromium"]
+# Only add Chromium, let Railway detect Node.js from .nvmrc
+nixPkgs = ["chromium"]
 
-[phases.install]
-cmds = ["npm ci"]
-
-# Note: Build is handled in railway.toml startCommand
-# This ensures frontend is built before server starts
+[phases.build]
+cmds = ["npm run build"]
 
 [start]
-cmd = "npm run build && npm start"
+cmd = "npm start"
