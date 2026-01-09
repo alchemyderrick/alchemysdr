@@ -1032,75 +1032,8 @@ app.post("/api/x-auth/login", async (req, res) => {
   }
 });
 
-// Store user X cookies from bookmarklet
-// In-memory storage (resets on server restart, but good enough for now)
-const userXCookies = new Map(); // sessionId -> cookies array
-
-// Link the cookies map to x-auth.js so it can access user-specific cookies
-import("./lib/x-auth.js").then(({ setUserCookiesMap }) => {
-  setUserCookiesMap(userXCookies);
-});
-
-app.post("/api/x-auth/save-cookies", (req, res) => {
-  try {
-    const { cookies } = req.body;
-
-    if (!cookies || !Array.isArray(cookies)) {
-      return res.status(400).json({ error: "Invalid cookies format" });
-    }
-
-    // Get or create session ID from cookie or header
-    let sessionId = req.cookies?.session_id || req.headers['x-session-id'];
-
-    if (!sessionId) {
-      // Generate new session ID
-      sessionId = nanoid();
-      res.cookie('session_id', sessionId, {
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        httpOnly: true,
-        sameSite: 'lax'
-      });
-    }
-
-    // Filter for X/Twitter cookies only
-    const xCookies = cookies.filter(c =>
-      c.domain && (c.domain.includes('twitter.com') || c.domain.includes('x.com'))
-    );
-
-    if (xCookies.length === 0) {
-      return res.status(400).json({ error: "No X/Twitter cookies found. Please log into X first." });
-    }
-
-    // Store cookies for this user session
-    userXCookies.set(sessionId, xCookies);
-    console.log(`[X-AUTH] Saved ${xCookies.length} X cookies for session ${sessionId}`);
-
-    res.json({
-      ok: true,
-      message: `Saved ${xCookies.length} X cookies`,
-      sessionId: sessionId
-    });
-  } catch (error) {
-    console.error("[API] Save cookies error:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get user's X cookies for their session
+// Check X authentication status
 app.get("/api/x-auth/status", (req, res) => {
-  const sessionId = req.cookies?.session_id || req.headers['x-session-id'];
-
-  // Check if user has session cookies (from bookmarklet)
-  if (sessionId && userXCookies.has(sessionId)) {
-    const cookies = userXCookies.get(sessionId);
-    return res.json({
-      authenticated: true,
-      cookieCount: cookies.length,
-      source: "bookmarklet",
-      sessionId: sessionId
-    });
-  }
-
   // Check if local x-cookies.json exists (for local development)
   const localCookiesPath = path.join(process.cwd(), 'x-cookies.json');
   if (fs.existsSync(localCookiesPath)) {
@@ -1133,7 +1066,7 @@ app.get("/api/x-auth/status", (req, res) => {
   // Not authenticated
   return res.json({
     authenticated: false,
-    message: "Not authenticated - please use the bookmarklet or set up local cookies"
+    message: "Not authenticated - please set up x-cookies.json or X_COOKIES environment variable"
   });
 });
 

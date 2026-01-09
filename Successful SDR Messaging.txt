@@ -406,3 +406,16 @@ Hey dfinzer.eth, congrats on the success over at OpenSea!
 
 I noticed OpenSea is building on Solana - our team recently revamped our Solana infrastructure, enabling up to 5x lower latency and 90k+ RPS throughput. Would you be open to a quick chat about how Alchemy's Node API could help improve the reliability and performance of OpenSea's Solana deployment?
 ---
+
+--- Follow-up sent 2026-01-09 ---
+Contact: dfinzer.eth | opensea at OpenSea
+Original message:
+Hey dfinzer.eth, congrats on the success over at OpenSea!
+
+I noticed OpenSea is building on Solana - our team recently revamped our Solana infrastructure, enabling up to 5x lower latency and 90k+ RPS throughput. Would you be open to a quick chat about how Alchemy's Node API could help improve the reliability and performance of OpenSea's Solana deployment?
+
+Follow-up:
+Hey dfinzer.eth,
+
+Just circling back on our Solana infrastructure chat - curious if you had a chance to take a look and let me know if there's anything I can provide to help? Looking forward to connecting.
+---
