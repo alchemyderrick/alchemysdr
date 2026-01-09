@@ -1012,6 +1012,24 @@ app.use("/api/drafts", createDraftRoutes(
 // Initialize WorkflowEngine
 const workflowEngine = new WorkflowEngine(db, anthropic, generateOutbound, nowISO, nanoid);
 
+// X Authentication endpoint - manually trigger visible browser login
+app.post("/api/x-auth/login", async (req, res) => {
+  try {
+    console.log("[API] Manual X authentication requested");
+    const { authenticate } = await import("./lib/x-auth.js");
+    const success = await authenticate();
+
+    if (success) {
+      res.json({ ok: true, message: "Authentication successful - cookies saved" });
+    } else {
+      res.status(500).json({ ok: false, error: "Authentication failed" });
+    }
+  } catch (error) {
+    console.error("[API] X auth error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // Mount workflow routes (must come BEFORE other target routes)
 app.use("/api/workflow", createWorkflowRoutes(workflowEngine));
 
