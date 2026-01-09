@@ -60,13 +60,13 @@ export function SendQueueCard() {
   }
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader>
-        <CardTitle>Send Queue</CardTitle>
-        <CardDescription>Generated outreach messages awaiting approval</CardDescription>
+    <Card className="flex flex-col h-[380px]">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Send Queue</CardTitle>
+        <CardDescription className="text-xs">Generated outreach messages awaiting approval</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1">
-        <ScrollArea className="h-[200px]">
+      <CardContent className="flex-1 p-4">
+        <ScrollArea className="h-full">
           {loading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (

@@ -31,13 +31,13 @@ export function SentMessagesCard() {
   }
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader>
-        <CardTitle>Sent Messages</CardTitle>
-        <CardDescription>Recent outreach messages successfully delivered</CardDescription>
+    <Card className="flex flex-col h-[380px]">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Sent Messages</CardTitle>
+        <CardDescription className="text-xs">Recent outreach messages successfully delivered</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1">
-        <ScrollArea className="h-[200px]">
+      <CardContent className="flex-1 p-4">
+        <ScrollArea className="h-full">
           {loading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (

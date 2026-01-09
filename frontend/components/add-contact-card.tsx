@@ -51,73 +51,76 @@ export function AddContactCard({ onRefresh }: AddContactCardProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Add Contact</CardTitle>
-        <CardDescription>Create a new contact and generate an outreach draft</CardDescription>
+    <Card className="flex flex-col h-[380px]">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Add Contact</CardTitle>
+        <CardDescription className="text-xs">Create a new contact and generate an outreach draft</CardDescription>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name *</Label>
+      <CardContent className="flex-1 overflow-auto">
+        <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="name" className="text-xs">Name *</Label>
               <Input
                 id="name"
                 placeholder="John Doe"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
+                className="h-8 text-sm"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="company">Company *</Label>
+            <div className="space-y-1">
+              <Label htmlFor="company" className="text-xs">Company *</Label>
               <Input
                 id="company"
                 placeholder="Acme Inc"
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
                 required
+                className="h-8 text-sm"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="telegram">Telegram Handle</Label>
+          <div className="space-y-1">
+            <Label htmlFor="telegram" className="text-xs">Telegram Handle</Label>
             <Input
               id="telegram"
               placeholder="@username"
               value={telegram}
               onChange={(e) => setTelegram(e.target.value)}
+              className="h-8 text-sm"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes / Angle</Label>
+          <div className="space-y-1">
+            <Label htmlFor="notes" className="text-xs">Notes / Angle</Label>
             <Textarea
               id="notes"
-              placeholder="Funding, hiring, chain pain points..."
+              placeholder="Funding, hiring..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="min-h-[60px] resize-none"
+              className="h-[50px] resize-none text-sm"
             />
           </div>
 
           <div className="flex gap-2">
-            <Button type="submit" disabled={loading} className="flex-1">
+            <Button type="submit" disabled={loading} className="flex-1 h-8 text-sm">
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                   Adding...
                 </>
               ) : (
                 <>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add + Generate Draft
+                  <Plus className="mr-1 h-3 w-3" />
+                  Add + Draft
                 </>
               )}
             </Button>
-            <Button type="button" variant="outline" onClick={onRefresh}>
-              <RefreshCw className="h-4 w-4" />
+            <Button type="button" variant="outline" onClick={onRefresh} className="h-8 w-8 p-0">
+              <RefreshCw className="h-3 w-3" />
             </Button>
           </div>
         </form>

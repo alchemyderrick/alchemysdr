@@ -36,31 +36,32 @@ export function DiscoverXCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Discover Users from X</CardTitle>
-        <CardDescription>Find potential leads from a company's X followers</CardDescription>
+    <Card className="flex flex-col h-[380px]">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Discover Users from X</CardTitle>
+        <CardDescription className="text-xs">Find potential leads from a company's X followers</CardDescription>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={(e) => { e.preventDefault(); handleDiscover(); }} className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="x-handle">Company X Handle</Label>
+      <CardContent className="flex-1">
+        <form onSubmit={(e) => { e.preventDefault(); handleDiscover(); }} className="space-y-2 h-full flex flex-col">
+          <div className="space-y-1 flex-1">
+            <Label htmlFor="x-handle" className="text-xs">Company X Handle</Label>
             <Input
               id="x-handle"
               placeholder="@alchemy"
               value={handle}
               onChange={(e) => setHandle(e.target.value)}
+              className="h-8 text-sm"
             />
           </div>
-          <Button type="submit" disabled={loading} className="w-full">
+          <Button type="submit" disabled={loading} className="w-full h-8 text-sm">
             {loading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
                 Discovering...
               </>
             ) : (
               <>
-                <Search className="mr-2 h-4 w-4" />
+                <Search className="mr-2 h-3 w-3" />
                 Discover Users
               </>
             )}
