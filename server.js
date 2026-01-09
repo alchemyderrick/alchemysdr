@@ -865,11 +865,10 @@ app.post("/api/drafts/:id/approve", (req, res) => {
     const info = db.prepare(`
       UPDATE drafts
       SET status = 'approved',
-          approved_at = ?,
           prepared_at = NULL,
           updated_at = ?
       WHERE id = ?
-    `).run(nowISO(), nowISO(), id);
+    `).run(nowISO(), id);
 
     if (info.changes === 0) {
       return res.status(404).json({ error: "Draft not found" });
