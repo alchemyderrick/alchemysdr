@@ -7,7 +7,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { WorkflowEngine } from "./lib/workflow-engine.js";
 import { initializeDatabase } from "./lib/database.js";
-import { getHtmlTemplate } from "./lib/html-template.js";
 import {
   nowISO,
   tgLinks,
@@ -72,9 +71,9 @@ if (apolloApiKey) {
   console.log("⚠️ Apollo API key not configured (will use Claude fallback only)");
 }
 
-// Serve main UI
+// Serve React UI
 app.get("/", (req, res) => {
-  // In production/Railway, serve Next.js static export if available
+  // In production/Railway, serve Next.js static export
   if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
     const nextIndexPath = path.join(process.cwd(), 'frontend', 'out', 'index.html');
 
@@ -82,24 +81,17 @@ app.get("/", (req, res) => {
       return res.sendFile(nextIndexPath);
     }
 
-    // Fallback: redirect to FRONTEND_URL if set
+    // If static export not found but FRONTEND_URL is set, redirect
     if (process.env.FRONTEND_URL) {
       return res.redirect(process.env.FRONTEND_URL);
     }
 
-    // Last resort: serve HTML UI
-    console.log("⚠️ Next.js export not found, serving HTML UI");
+    // No React UI available
+    return res.status(503).send('React UI not built. Please run: npm run build');
   }
 
-  // In development, serve HTML UI (localhost:3000)
-  res.setHeader("Content-Type", "text/html");
-  res.send(getHtmlTemplate());
-});
-
-// Serve HTML UI at /html route (always available as fallback)
-app.get("/html", (req, res) => {
-  res.setHeader("Content-Type", "text/html");
-  res.send(getHtmlTemplate());
+  // In development, redirect to Next.js dev server
+  res.redirect('http://localhost:3001');
 });
 
 app.get("/api/targets/approved", (req, res) => {
