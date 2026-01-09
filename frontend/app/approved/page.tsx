@@ -51,7 +51,7 @@ export default function ApprovedPage() {
     setActionLoading(targetId + '-x')
     try {
       toast.info('Discovering X users...')
-      const result = await api.post(`/api/targets/${targetId}/discover-x-users`, { max_users: 5 })
+      const result = await api.post<{ valid: number }>(`/api/targets/${targetId}/discover-x-users`, { max_users: 5 })
       toast.success(`Found ${result.valid} valid users! Check the queue.`)
     } catch (error) {
       toast.error('Failed to discover X users')
@@ -64,7 +64,7 @@ export default function ApprovedPage() {
     setActionLoading(targetId + '-search')
     try {
       toast.info('Searching for contacts...')
-      const result = await api.post(`/api/targets/${targetId}/all-contacts`, {})
+      const result = await api.post<{ stored: number }>(`/api/targets/${targetId}/all-contacts`, {})
       if (result.stored === 0) {
         toast.info('All contacts found - no new contacts to add')
       } else {
@@ -81,7 +81,7 @@ export default function ApprovedPage() {
     setActionLoading(target.id + '-view')
     try {
       toast.info('Loading contacts...')
-      const result = await api.get(`/api/targets/${target.id}/view-contacts`)
+      const result = await api.get<{ contacts: any[] }>(`/api/targets/${target.id}/view-contacts`)
       if (result.contacts.length === 0) {
         toast.info('No contacts found yet. Click "Search" to find contacts.')
       } else {

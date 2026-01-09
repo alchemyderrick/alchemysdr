@@ -54,7 +54,7 @@ export function ContactsModal({ open, onOpenChange, teamName, teamId, contacts }
       toast.info('Adding contact and generating draft...')
 
       // Add contact
-      const contactRes = await api.post('/api/contacts', {
+      const contactRes = await api.post<{ id: string }>('/api/contacts', {
         name: contact.name,
         company: teamName,
         title: contact.title || '',

@@ -30,7 +30,7 @@ export function FollowupModal({ open, onOpenChange, draft, onSuccess }: Followup
     setLoading(true)
     try {
       toast.info('Generating follow-up with Claude...')
-      const result = await api.post('/api/drafts/generate-followup', {
+      const result = await api.post<{ message_text: string }>('/api/drafts/generate-followup', {
         contact_name: draft.name,
         company: draft.company,
         original_message: draft.message_text,

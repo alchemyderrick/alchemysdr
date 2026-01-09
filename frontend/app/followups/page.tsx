@@ -220,7 +220,7 @@ export default function FollowupsPage() {
             contactId={selectedContact.contact_id}
             contactName={selectedContact.name}
             company={selectedContact.company}
-            telegramHandle={selectedContact.telegram_handle}
+            telegramHandle={selectedContact.telegram_handle || ''}
           />
         )}
 

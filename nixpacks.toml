@@ -4,8 +4,8 @@ nixPkgs = ["nodejs-18_x", "chromium"]
 [phases.install]
 cmds = ["npm ci"]
 
-[phases.build]
-cmds = ["npm run build"]
+# Note: Build is handled in railway.toml startCommand
+# This ensures frontend is built before server starts
 
 [start]
-cmd = "npm start"
+cmd = "npm run build && npm start"
