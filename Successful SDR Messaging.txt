@@ -177,3 +177,90 @@ I'd be curious to learn more about the challenges you're facing on the infrastru
 
 Let me know if you have any availability this week to chat through how Alchemy could support Uniswap's scaling efforts. No pressure at all, just wanted to keep this on your radar.
 ---
+
+--- Message sent 2026-01-09 ---
+Contact: YGG Play at Yield Guild Games
+Message:
+Hey YGG Play, congrats on the success over at Yield Guild Games!
+
+I noticed your team is focused on building the "home of casual degen games" - that's an incredibly exciting space. As the leading Web3 infrastructure provider, Alchemy has been working closely with innovative gaming projects like yours to help enhance user experiences and handle scaling infrastructure.
+
+Our new Cortex architecture, for example, delivers up to 5x lower latency across every chain. This could be a game-changer for your real-time gameplay needs. Would you be open to a quick call to explore how our enhanced APIs and webhooks could help optimize performance and reliability for your Yield Guild Games community? Just let me know if you have 15 minutes this week.
+---
+
+--- Message sent 2026-01-09 ---
+Contact: Eshan at Uniswap
+Message:
+Hey Eshan, congrats on the success over at Uniswap!
+
+I noticed you're running infrastructure for one of the largest DEX protocols in Web3. As the leading blockchain infrastructure provider, Alchemy has been working closely with teams like Uniswap to help scale and optimize their infrastructure.
+
+Our new Cortex architecture has enabled up to 5x lower latency across the Ethereum network. This could be a game-changer for improving the user experience on Uniswap, especially during high-volatility events. I'd be happy to walk through a quick demo of how our enhanced APIs and real-time webhooks could help streamline your infrastructure. Are you free for a 15-minute call this week?
+---
+
+--- Message sent 2026-01-09 ---
+Contact: Eshan at Opensea
+Message:
+Hey Eshan, congrats on the success over at OpenSea!
+
+As the leading Web3 infrastructure provider, Alchemy has been working closely with teams like yours to help scale and optimize their blockchain applications. One area I'm particularly excited about is our new Cortex architecture, which has enabled up to 5x lower latency across the Ethereum network.
+
+Given the real-time nature of the NFT market, I'm curious if you've been exploring ways to enhance the user experience through faster transaction processing. Would you be open to a quick call to discuss how our enhanced APIs and multi-region redundancy could help improve reliability and performance for the OpenSea platform? I'd be happy to provide a technical overview.
+---
+
+--- Message sent 2026-01-09 ---
+Contact: Eshan at Opensea
+Message:
+Hey Eshan, congrats on the success over at OpenSea!
+
+Alchemy's new Cortex architecture enables up to 5x lower latency across Ethereum. Would you be open to a quick call to discuss how our enhanced APIs and multi-region redundancy could improve reliability and performance for the OpenSea platform?
+---
+
+--- Message sent 2026-01-09 ---
+Contact: Eshan at Stable.xyz
+Message:
+Hey Eshan, congrats on the success over at Stable.xyz!
+
+I noticed your team is building infrastructure to power the future of DeFi. As the leading Web3 infrastructure provider, Alchemy has been working closely with innovative teams like yours to enhance performance and reliability across the blockchain ecosystem.
+
+Our new Cortex architecture, for example, delivers up to 5x lower latency across every chain we support. I'd be curious to learn more about the challenges you're facing on the infrastructure side as Stable.xyz continues to scale. Would you be open to a quick call to explore how Alchemy's multi-region redundancy and real-time webhooks could help optimize the user experience for your platform? Just let me know if you have 15 minutes this week.
+---
+
+--- Message sent 2026-01-09 ---
+Contact: Eshan at Opensea
+Message:
+Hey Eshan, congrats on the success over at OpenSea!
+
+As the leading Web3 infrastructure provider, Alchemy has been working closely with teams like yours to enhance the user experience through blazing-fast performance. Our new Cortex architecture, for example, delivers up to 5x lower latency across the Ethereum network.
+
+Given the real-time nature of the NFT market, I'm curious if you've been exploring ways to further optimize OpenSea's infrastructure to handle unpredictable spikes in demand. Would you be open to a quick discussion on how Alchemy's multi-region redundancy and enhanced APIs could help improve reliability and throughput for your platform?
+---
+
+--- Message sent 2026-01-09 ---
+Contact: Eshan at Opensea
+Message:
+Hey Eshan, congrats on the success over at OpenSea!
+
+As the leading Web3 infrastructure provider, Alchemy has been focused on helping top teams like yours deliver lightning-fast, reliable experiences for their users. Our new Cortex architecture, for example, has enabled up to 5x lower latency across the Ethereum network - a game-changer for the real-time NFT market.
+
+I'd be curious to learn more about the scaling challenges you're facing on the infrastructure side. Would you be open to a quick 15-minute call to explore how our multi-region redundancy and enhanced APIs could help optimize performance and reliability for the OpenSea platform?
+---
+
+--- Message sent 2026-01-09 ---
+Contact: Javi at Hyperliquid
+Message:
+Hey Javi, congrats on the success over at Hyperliquid!
+
+
+Yes, Alchemy's RPC services would be a great fit for Hyperliquid. Our Node API can provide you with up to 90,000 RPS across all your chain integrations, with consistently low latency of under 100ms. We've seen teams like Uniswap and Polymarket achieve up to 5x faster response times by leveraging our new Cortex architecture.
+
+Would you be open to a quick call to discuss how Alchemy's multi-region redundancy and enhanced APIs could optimize Hyperliquid's infrastructure?
+---
+
+--- Message sent 2026-01-09 ---
+Contact: Eshan at Opensea
+Message:
+Hey Eshan, congrats on the crushing it at OpenSea!
+
+Our Alchemy Data API's Transfers endpoint enables you to fetch historical transactions for any address in a single request. Given the real-time nature of the NFT market, I'm curious if you've explored ways to enhance OpenSea's infrastructure to provide faster, more reliable transaction data for your rs. Would you be open to a quick call to discuss how Alchemy's Cortex architecture could help optimize performance?
+---

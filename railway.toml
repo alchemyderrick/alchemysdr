@@ -2,8 +2,7 @@
 # This deploys the SDR Console with Express API and Next.js frontend
 
 [build]
-builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+builder = "NIXPACKS"
 
 [deploy]
 startCommand = "npm start"

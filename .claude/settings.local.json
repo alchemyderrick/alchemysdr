@@ -40,7 +40,14 @@
       "Bash(command -v railway:*)",
       "Bash(sudo npm install:*)",
       "Bash(npm start\"\n- Update nixpacks.toml start command to match\n- Ensures frontend is built before server starts\n\nResult: Build now completes successfully on Railway\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(=20.9.0 is required\"\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(=20.9.0 is required\"\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "mcp__shadcn__getComponents",
+      "Bash(PORT=3001 npm start:*)",
+      "Bash(git checkout:*)",
+      "Bash(NODE_ENV=production node server.js)",
+      "Bash(NODE_ENV=production npm run build:*)",
+      "Bash(echo:*)",
+      "Bash(NODE_ENV=production npx next:*)"
     ]
   }
 }
