@@ -1,0 +1,74 @@
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+
+class APIError extends Error {
+  constructor(public status: number, message: string) {
+    super(message)
+    this.name = 'APIError'
+  }
+}
+
+export const api = {
+  async get<T>(path: string): Promise<T> {
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!res.ok) {
+      throw new APIError(res.status, `API error: ${res.statusText}`)
+    }
+
+    return res.json()
+  },
+
+  async post<T>(path: string, data?: any): Promise<T> {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: data ? JSON.stringify(data) : undefined,
+    })
+
+    if (!res.ok) {
+      throw new APIError(res.status, `API error: ${res.statusText}`)
+    }
+
+    return res.json()
+  },
+
+  async patch<T>(path: string, data: any): Promise<T> {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    })
+
+    if (!res.ok) {
+      throw new APIError(res.status, `API error: ${res.statusText}`)
+    }
+
+    return res.json()
+  },
+
+  async delete<T>(path: string): Promise<T> {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!res.ok) {
+      throw new APIError(res.status, `API error: ${res.statusText}`)
+    }
+
+    return res.json()
+  },
+}
+
+// Export API_BASE for use in components
+export { API_BASE }

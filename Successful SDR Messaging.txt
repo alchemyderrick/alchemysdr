@@ -432,3 +432,11 @@ Hey dfinzer.eth,
 
 Just checking in on our Solana infrastructure discussion. Would love to hear your thoughts whenever you have a chance. Look forward to connecting!
 ---
+
+--- Message sent 2026-01-09 ---
+Contact: Eshan at Opensea
+Message:
+Hey Eshan, congrats on the success over at Opensea!
+
+I noticed you might be facing some infrastructure challenges, particularly around your Solana node setup. Would you be open to a quick call to discuss how Alchemy's recent Solana architecture revamp could potentially help?
+---

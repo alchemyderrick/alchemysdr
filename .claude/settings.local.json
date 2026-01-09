@@ -25,7 +25,15 @@
       "Bash(openssl rand:*)",
       "Bash(cat:*)",
       "Bash(npm run relayer:*)",
-      "Bash(gh api:*)"
+      "Bash(gh api:*)",
+      "Bash(npm start)",
+      "Bash(git config:*)",
+      "Bash(du:*)",
+      "Bash(npx create-next-app:*)",
+      "Bash(npx shadcn@latest init -d)",
+      "Bash(npx shadcn@latest add button card input textarea dialog badge toast scroll-area skeleton separator -y)",
+      "Bash(npx shadcn@latest add button card input textarea dialog badge sonner scroll-area skeleton separator -y)",
+      "Bash(npm run dev:*)"
     ]
   }
 }

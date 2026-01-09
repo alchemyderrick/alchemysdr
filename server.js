@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import cors from "cors";
 import cookieParser from "cookie-parser";
 import { nanoid } from "nanoid";
 import fs from "node:fs";
@@ -29,6 +30,13 @@ import { createDraftRoutes } from "./routes/drafts.js";
 import { createApolloClient } from "./lib/apollo-search.js";
 
 const app = express();
+
+// CORS configuration for React frontend
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+  credentials: true,
+}));
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
