@@ -51,8 +51,8 @@ export function AddContactCard({ onRefresh }: AddContactCardProps) {
   }
 
   return (
-    <Card className="flex flex-col h-[380px]">
-      <CardHeader className="pb-3">
+    <Card className="flex flex-col h-[380px] min-h-[380px] max-h-[380px]">
+      <CardHeader className="pb-3 shrink-0">
         <CardTitle className="text-base">Add Contact</CardTitle>
         <CardDescription className="text-xs">Create a new contact and generate an outreach draft</CardDescription>
       </CardHeader>

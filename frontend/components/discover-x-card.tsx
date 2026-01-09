@@ -36,8 +36,8 @@ export function DiscoverXCard() {
   }
 
   return (
-    <Card className="flex flex-col h-[380px]">
-      <CardHeader className="pb-3">
+    <Card className="flex flex-col h-[380px] min-h-[380px] max-h-[380px]">
+      <CardHeader className="pb-3 shrink-0">
         <CardTitle className="text-base">Discover Users from X</CardTitle>
         <CardDescription className="text-xs">Find potential leads from a company's X followers</CardDescription>
       </CardHeader>

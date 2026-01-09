@@ -31,8 +31,8 @@ export function SentMessagesCard() {
   }
 
   return (
-    <Card className="flex flex-col h-[380px]">
-      <CardHeader className="pb-3">
+    <Card className="flex flex-col h-[380px] min-h-[380px] max-h-[380px]">
+      <CardHeader className="pb-3 shrink-0">
         <CardTitle className="text-base">Sent Messages</CardTitle>
         <CardDescription className="text-xs">Recent outreach messages successfully delivered</CardDescription>
       </CardHeader>
