@@ -662,7 +662,7 @@ Include 15-20 companies. Focus on DeFi protocols (DEXs, lending, derivatives), w
             newlyInsertedTeams.map(async (target) => {
               try {
                 console.log(`🔍 Searching contacts for ${target.team_name}`);
-                const result = await searchCompanyContacts(target, anthropic, db, nanoid);
+                const result = await searchCompanyContacts(target, anthropic, db, nanoid, nowISO, apolloClient);
                 console.log(`✅ Found ${result.stored} contacts for ${target.team_name}`);
               } catch (error) {
                 console.error(`❌ Contact search failed for ${target.team_name}:`, error.message);
