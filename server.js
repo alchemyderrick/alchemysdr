@@ -903,7 +903,7 @@ function authenticateRelayer(req, res, next) {
 // Relayer API endpoints
 app.get("/api/relayer/approved-pending", authenticateRelayer, (req, res) => {
   try {
-    // Find approved drafts that haven't been prepared yet
+    // Find approved drafts and follow-ups that haven't been prepared yet
     const rows = db.prepare(`
       SELECT
         d.id,
@@ -916,7 +916,7 @@ app.get("/api/relayer/approved-pending", authenticateRelayer, (req, res) => {
         c.company
       FROM drafts d
       JOIN contacts c ON c.id = d.contact_id
-      WHERE d.status = 'approved'
+      WHERE d.status IN ('approved', 'followup')
         AND (d.prepared_at IS NULL OR d.prepared_at = '')
       ORDER BY d.updated_at DESC
       LIMIT 50

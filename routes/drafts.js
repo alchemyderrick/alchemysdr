@@ -263,9 +263,6 @@ export function createDraftRoutes(
   // Send a follow-up message
   router.post("/send-followup", async (req, res) => {
     try {
-      if (process.platform !== "darwin")
-        return res.status(400).json({ error: "Telegram automation only on macOS" });
-
       const { contact_id, telegram_handle, message_text, original_message, contact_name, company } = req.body;
 
       if (!telegram_handle || !message_text) {
@@ -277,9 +274,13 @@ export function createDraftRoutes(
       // Create a follow-up draft record in the database
       const followUpId = nanoid();
       const ts = nowISO();
+      const IS_MAC = process.platform === "darwin";
+
+      // If on Mac, set prepared_at so we can do local automation immediately
+      // If not on Mac (Railway), set prepared_at=NULL so relayer picks it up
       db.prepare(
         `INSERT INTO drafts (id, contact_id, channel, message_text, status, prepared_at, created_at, updated_at) VALUES (?, ?, 'telegram', ?, 'followup', ?, ?, ?)`
-      ).run(followUpId, contact_id, message_text, ts, ts, ts);
+      ).run(followUpId, contact_id, message_text, IS_MAC ? ts : null, ts, ts);
 
       // Save to SDR style file
       try {
@@ -342,20 +343,28 @@ export function createDraftRoutes(
         // Don't fail the request if webhook fails
       }
 
-      // Copy to clipboard
-      setClipboardMac(message_text);
+      // If on Mac, do local automation
+      // If on Railway, relayer will handle it
+      if (IS_MAC) {
+        // Copy to clipboard
+        setClipboardMac(message_text);
 
-      // Open Telegram
-      openTelegramDesktopLink(telegram_handle);
-      await new Promise((r) => setTimeout(r, 700));
+        // Open Telegram
+        openTelegramDesktopLink(telegram_handle);
+        await new Promise((r) => setTimeout(r, 700));
 
-      // Paste
-      await pasteIntoTelegram();
+        // Paste
+        await pasteIntoTelegram();
 
-      // Schedule auto-send
-      scheduleTelegramAutoSend(followUpId);
+        // Schedule auto-send
+        scheduleTelegramAutoSend(followUpId);
 
-      res.json({ ok: true, auto_send: AUTO_SEND_ENABLED, auto_send_after_seconds: AUTO_SEND_IDLE_SECONDS });
+        res.json({ ok: true, auto_send: AUTO_SEND_ENABLED, auto_send_after_seconds: AUTO_SEND_IDLE_SECONDS });
+      } else {
+        // On Railway - relayer will pick it up
+        console.log(`✅ Follow-up draft created for relayer (ID: ${followUpId})`);
+        res.json({ ok: true, relayer_mode: true, message: "Follow-up queued for relayer" });
+      }
     } catch (e) {
       console.error("send-followup error:", e?.message || e, e?.stderr || "");
       res.status(500).json({ error: "failed to send follow-up", message: e?.message, stderr: e?.stderr });
