@@ -64,6 +64,8 @@ function autoPasteTelegram() {
       'delay 0.35',
       'tell application "System Events"',
       '  keystroke "v" using command down',
+      '  delay 0.2',
+      '  key code 36',
       'end tell'
     ];
 
@@ -94,9 +96,9 @@ async function prepareSend(draft) {
     // Wait for chat to load
     await new Promise((r) => setTimeout(r, 700));
 
-    // Paste into chat input
+    // Paste into chat input and send
     await autoPasteTelegram();
-    log(`✅ Pasted message for ${draft.name} (@${draft.telegram_handle}) — Press Enter to send`);
+    log(`✅ Message sent to ${draft.name} (@${draft.telegram_handle})`);
 
     return true;
   } catch (error) {
