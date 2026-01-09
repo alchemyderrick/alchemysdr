@@ -909,7 +909,7 @@ app.post("/api/relayer/mark-prepared/:id", authenticateRelayer, (req, res) => {
   try {
     const info = db.prepare(`
       UPDATE drafts
-      SET prepared_at = ?, updated_at = ?
+      SET prepared_at = ?, updated_at = ?, status = 'sent'
       WHERE id = ?
     `).run(nowISO(), nowISO(), id);
 
@@ -917,8 +917,8 @@ app.post("/api/relayer/mark-prepared/:id", authenticateRelayer, (req, res) => {
       return res.status(404).json({ error: "Draft not found" });
     }
 
-    console.log(`✅ Relayer marked draft ${id} as prepared`);
-    res.json({ ok: true, message: "Draft marked as prepared" });
+    console.log(`✅ Relayer marked draft ${id} as sent`);
+    res.json({ ok: true, message: "Draft marked as sent" });
   } catch (e) {
     console.error("relayer/mark-prepared error:", e);
     res.status(500).json({ error: "Failed to mark draft as prepared", message: e.message });

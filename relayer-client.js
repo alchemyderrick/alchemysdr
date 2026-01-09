@@ -12,6 +12,8 @@ const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 10000);
 // State management
 let busy = false;
 const processed = new Set();
+const failedDrafts = new Map(); // Track failures: draftId -> failureCount
+const MAX_RETRIES_PER_DRAFT = 2; // Stop retrying after 2 failures
 let consecutiveErrors = 0;
 const MAX_CONSECUTIVE_ERRORS = 5;
 
@@ -57,14 +59,17 @@ function tgDeepLink(handleRaw) {
 
 function autoPasteTelegram() {
   return new Promise((resolve, reject) => {
-    const script = `
-      tell application "Telegram" to activate
-      delay 0.35
-      tell application "System Events"
-        keystroke "v" using command down
-      end tell
-    `;
-    exec(`osascript -e '${script.replace(/\n/g, " ")}'`, (err) => {
+    const script = [
+      'tell application "Telegram" to activate',
+      'delay 0.35',
+      'tell application "System Events"',
+      '  keystroke "v" using command down',
+      'end tell'
+    ];
+
+    const args = script.flatMap(line => ['-e', line]);
+
+    exec(`osascript ${args.map(a => `'${a}'`).join(' ')}`, (err) => {
       if (err) reject(err);
       else resolve();
     });
@@ -174,27 +179,41 @@ async function processNextDraft() {
       return;
     }
 
-    // Find first draft we haven't processed
-    const draft = drafts.find((d) => !processed.has(d.id));
+    // Find first draft we haven't processed or haven't exceeded retries
+    const draft = drafts.find((d) => {
+      if (processed.has(d.id)) return false;
+      const failures = failedDrafts.get(d.id) || 0;
+      return failures < MAX_RETRIES_PER_DRAFT;
+    });
 
     if (!draft) {
       return;
     }
 
     busy = true;
-    processed.add(draft.id);
+    const failureCount = failedDrafts.get(draft.id) || 0;
 
-    log(`\n🔄 Processing draft ${draft.id} for ${draft.name} (@${draft.telegram_handle})`);
+    log(`\n🔄 Processing draft ${draft.id} for ${draft.name} (@${draft.telegram_handle}) (attempt ${failureCount + 1}/${MAX_RETRIES_PER_DRAFT})`);
 
     try {
       await prepareSend(draft);
       await markPrepared(draft.id);
       log(`✅ Successfully prepared draft ${draft.id}`);
+      processed.add(draft.id);
+      failedDrafts.delete(draft.id); // Clear failure count on success
       consecutiveErrors = 0;
     } catch (error) {
       log(`❌ Failed to prepare draft ${draft.id}: ${error.message}`);
-      await markFailed(draft.id, error.message);
-      processed.delete(draft.id);
+      const newFailureCount = failureCount + 1;
+      failedDrafts.set(draft.id, newFailureCount);
+
+      if (newFailureCount >= MAX_RETRIES_PER_DRAFT) {
+        log(`⚠️ Draft ${draft.id} failed ${MAX_RETRIES_PER_DRAFT} times. Giving up.`);
+        processed.add(draft.id); // Mark as processed to stop retrying
+      } else {
+        log(`⏳ Will retry draft ${draft.id} on next poll`);
+        await markFailed(draft.id, error.message); // Clear prepared_at for retry
+      }
       consecutiveErrors++;
     }
   } catch (error) {
