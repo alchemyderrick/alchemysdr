@@ -1,5 +1,5 @@
-# Railway Backend Service Configuration
-# This deploys the Express API server
+# Railway Service Configuration
+# This deploys both the Express API and React frontend
 
 [build]
 builder = "NIXPACKS"

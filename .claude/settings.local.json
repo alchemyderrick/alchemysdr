@@ -33,7 +33,14 @@
       "Bash(npx shadcn@latest init -d)",
       "Bash(npx shadcn@latest add button card input textarea dialog badge toast scroll-area skeleton separator -y)",
       "Bash(npx shadcn@latest add button card input textarea dialog badge sonner scroll-area skeleton separator -y)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(npx shadcn@latest add label form alert avatar -y)",
+      "Bash(npm run build:*)",
+      "Bash(grep:*)",
+      "Bash(command -v railway:*)",
+      "Bash(sudo npm install:*)",
+      "Bash(npm start\"\n- Update nixpacks.toml start command to match\n- Ensures frontend is built before server starts\n\nResult: Build now completes successfully on Railway\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(=20.9.0 is required\"\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }
