@@ -1,0 +1,38 @@
+# Railway ignore file
+
+# Local environment files
+.env.local
+.env
+
+# Node modules (will be reinstalled)
+node_modules/
+
+# Frontend (deployed separately)
+frontend/.next/
+frontend/node_modules/
+
+# Local data
+data.db
+*.db
+puppeteer-data/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.backup
+lib/html-template.js.backup
+
+# X cookies (local only)
+x-cookies.json

@@ -1004,7 +1004,7 @@ app.get("/api/queue", (req, res) => {
 });
 
 // Mount contact and draft routes
-app.use("/api/contacts", createContactRoutes(db, nanoid, nowISO));
+app.use("/api/contacts", createContactRoutes(db, nanoid, nowISO, generateOutbound));
 app.use("/api/drafts", createDraftRoutes(
   db,
   nanoid,

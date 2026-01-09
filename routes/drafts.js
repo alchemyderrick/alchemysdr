@@ -24,6 +24,17 @@ export function createDraftRoutes(
   const AUTO_SEND_ENABLED = String(process.env.AUTO_SEND_ENABLED || "true").toLowerCase() !== "false";
   const AUTO_SEND_IDLE_SECONDS = Number(process.env.AUTO_SEND_IDLE_SECONDS || 5);
 
+  // Get all drafts with contact information
+  router.get("/", (req, res) => {
+    const rows = db.prepare(`
+      SELECT d.*, c.name, c.company, c.title, c.telegram_handle
+      FROM drafts d
+      JOIN contacts c ON c.id = d.contact_id
+      ORDER BY d.created_at DESC
+    `).all();
+    res.json(rows.map((r) => ({ ...r, tg: tgLinks(r.telegram_handle) })));
+  });
+
   // Generate a draft message for a contact
   router.post("/generate", async (req, res) => {
     try {
@@ -138,8 +149,27 @@ export function createDraftRoutes(
   // Approve a draft
   router.post("/:id/approve", (req, res) => {
     const { id } = req.params;
+
+    // Get draft with contact info for saving to style file
+    const row = db.prepare(
+      `SELECT d.*, c.name, c.company FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.id = ?`
+    ).get(id);
+    if (!row) return res.status(404).json({ error: "draft not found" });
+
     const info = db.prepare(`UPDATE drafts SET status = 'approved', updated_at = ? WHERE id = ?`).run(nowISO(), id);
     if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
+
+    // Save approved message to SDR style file for future learning
+    try {
+      const timestamp = new Date().toISOString().split("T")[0];
+      const entry = `\n\n--- Message approved ${timestamp} ---\nContact: ${row.name} at ${row.company}\nMessage:\n${row.message_text}\n---`;
+      fs.appendFileSync(SDR_STYLE_FILE, entry, "utf8");
+      console.log(`✅ Saved approved message to ${SDR_STYLE_FILE}`);
+    } catch (e) {
+      console.error("Failed to save approved message to style file:", e.message);
+      // Don't fail the request if file append fails
+    }
+
     res.json({ ok: true });
   });
 

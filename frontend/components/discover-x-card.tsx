@@ -36,12 +36,17 @@ export function DiscoverXCard() {
   }
 
   return (
-    <Card className="flex flex-col h-[380px] min-h-[380px] max-h-[380px]">
-      <CardHeader className="pb-3 shrink-0">
-        <CardTitle className="text-base">Discover Users from X</CardTitle>
-        <CardDescription className="text-xs">Find potential leads from a company's X followers</CardDescription>
+    <Card className="relative overflow-hidden flex flex-col h-[420px] min-h-[420px] max-h-[420px] border border-primary/50 rounded-xl bg-card/50 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:shadow-primary/20 hover:border-primary/80 group">
+      <CardHeader className="pb-4 shrink-0">
+        <CardTitle className="text-base flex items-center gap-2 text-foreground">
+          <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+            <Search className="h-4 w-4" />
+          </div>
+          Discover Users from X
+        </CardTitle>
+        <CardDescription className="text-xs text-muted-foreground">Find potential leads from a company's X followers</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 overflow-auto">
+      <CardContent className="flex-1">
         <form onSubmit={(e) => { e.preventDefault(); handleDiscover(); }} className="space-y-2">
           <div className="space-y-1">
             <Label htmlFor="x-handle" className="text-xs">Company X Handle</Label>
@@ -55,9 +60,13 @@ export function DiscoverXCard() {
           </div>
 
           {/* Spacer to match Add Contact card height - accounts for 3 additional fields */}
-          <div className="h-[142px]"></div>
+          <div className="h-[182px]"></div>
 
-          <Button type="submit" disabled={loading} className="w-full h-8 text-sm">
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full h-9 text-sm bg-primary hover:bg-primary/90 text-white border-0 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all"
+          >
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-3 w-3 animate-spin" />

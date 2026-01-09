@@ -44,19 +44,26 @@ export function AddContactCard({ onRefresh }: AddContactCardProps) {
       setNotes('')
       onRefresh?.()
     } catch (error) {
-      toast.error('Failed to add contact')
+      console.error('Failed to add contact:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add contact'
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <Card className="flex flex-col h-[380px] min-h-[380px] max-h-[380px]">
-      <CardHeader className="pb-3 shrink-0">
-        <CardTitle className="text-base">Add Contact</CardTitle>
-        <CardDescription className="text-xs">Create a new contact and generate an outreach draft</CardDescription>
+    <Card className="relative overflow-hidden flex flex-col h-[420px] min-h-[420px] max-h-[420px] border border-purple/50 rounded-xl bg-card/50 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:shadow-purple/20 hover:border-purple/80 group">
+      <CardHeader className="pb-4 shrink-0">
+        <CardTitle className="text-base flex items-center gap-2 text-foreground">
+          <div className="p-1.5 rounded-lg bg-purple/10 text-purple">
+            <Plus className="h-4 w-4" />
+          </div>
+          Add Contact
+        </CardTitle>
+        <CardDescription className="text-xs text-muted-foreground">Create a new contact and generate an outreach draft</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 overflow-auto">
+      <CardContent className="flex-1">
         <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
@@ -106,7 +113,11 @@ export function AddContactCard({ onRefresh }: AddContactCardProps) {
           </div>
 
           <div className="flex gap-2">
-            <Button type="submit" disabled={loading} className="flex-1 h-8 text-sm">
+            <Button
+              type="submit"
+              disabled={loading}
+              className="flex-1 h-9 text-sm bg-purple hover:bg-purple/90 text-white border-0 shadow-lg shadow-purple/20 hover:shadow-xl hover:shadow-purple/30 transition-all"
+            >
               {loading ? (
                 <>
                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -119,7 +130,12 @@ export function AddContactCard({ onRefresh }: AddContactCardProps) {
                 </>
               )}
             </Button>
-            <Button type="button" variant="outline" onClick={onRefresh} className="h-8 w-8 p-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onRefresh}
+              className="h-9 w-9 p-0 hover:bg-purple/10 hover:border-purple transition-all border-border"
+            >
               <RefreshCw className="h-3 w-3" />
             </Button>
           </div>

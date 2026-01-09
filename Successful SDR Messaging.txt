@@ -67,14 +67,7 @@ just touching base again as we've been partnering with teams like Opensea, Phant
 
 happy to chat moreover what this looks like for Definitive early next week 🙂
 
---- Message sent 2026-01-07 ---
-Contact: Everyone Onchain Fund at Alchemy
-Message:
-Hey team! huge congrats on all the success over at SQS so far
 
-wanted to reach out as we recently shipped our first full infra revamp
-improving latency by up to 5x for teams like Opensea, Phantom, Uniswap,
-etc.
 
 I noticed your usage has gone up pretty massively this month on Alchemy
 and would love to learn more about what you're building today 
@@ -87,94 +80,6 @@ Let me know if you'd be free for a quick 15 min call next week!
 (benchmarks here: https://alchemyinsights.grafana.net/public-
 dashboards/bddf9388a79f436ea0994cfbebb37a5a)
 
----
-
---- Message sent 2026-01-07 ---
-Contact: Alex McCurry at SushiSwap
-Message:
-Hey Alex, congrats on the success over at SushiSwap!
-
-I noticed your usage has been ramping up quite a bit on Alchemy, and I'd love to learn more about what you all are building. Is there a good time next week we could jump on a quick 15-minute call to discuss how we might be able to help scale your infrastructure even further?
----
-
---- Message sent 2026-01-07 ---
-Contact: Eshan at Alchemy
-Message:
-Hey Eshan, congrats on the success over at Alchemy!
-
-I noticed you all have been facing some latency issues on your Solana infrastructure recently. I'd love to learn more about the challenges you're seeing and share how our recent Solana architecture revamp could potentially help. Would you be free for a quick 15-minute call next week to discuss?
----
-
---- Message sent 2026-01-07 ---
-Contact: Everyone Onchain Fund at Alchemy
-Message:
-Hey team! huge congrats on all the success over at SQS so far
-
-wanted to reach out as we recently shipped our first full infra revamp
-improving latency by up to 5x for teams like Opensea, Phantom, Uniswap,
-etc.
-
-I noticed your usage has gone up pretty massively this month on Alchemy
-and would love to learn more about what you're building today 
-
-Happy to also trade some notes on how we can improve your latency and
-potentially provide cheaper rates depending on your overall usage
-
-Let me know if you'd be free for a quick 15 min call next week!
-
-(benchmarks here: https://alchemyinsights.grafana.net/public-
-dashboards/bddf9388a79f436ea0994cfbebb37a5a)
-
----
-
---- Message sent 2026-01-07 ---
-Contact: Eshan at Alchemy
-Message:
-Hey Eshan, congrats on the success over at Alchemy!
-
-I noticed you might be facing some infrastructure challenges on the Solana side. I'd love to learn more about what you're building and see if there's anything Alchemy can do to help. Would you be free for a quick 15-minute call next week to discuss?
----
-
---- Follow-up sent 2026-01-07 ---
-Contact: Eshan at Alchemy
-Original message:
-Hey Eshan, congrats on the success over at Alchemy!
-
-I noticed you might be facing some infrastructure challenges on the Solana side. I'd love to learn more about what you're building and see if there's anything Alchemy can do to help. Would you be free for a quick 15-minute call next week to discuss?
-
-Follow-up:
-Hey Eshan, just wanted to circle back on our previous chat about Alchemy's Solana infrastructure. Curious if you had a chance to take a look and let me know if you'd be available for a quick call to discuss further. Let me know what works best for you!
----
-
---- Follow-up sent 2026-01-07 ---
-Contact: Eshan at Alchemy
-Original message:
-Hey Eshan, congrats on the success over at Alchemy!
-
-I noticed you might be facing some infrastructure challenges on the Solana side. I'd love to learn more about what you're building and see if there's anything Alchemy can do to help. Would you be free for a quick 15-minute call next week to discuss?
-
-Follow-up:
-Hey Eshan, just wanted to circle back on our previous chat about Alchemy's Solana infrastructure. Curious if you had a chance to take a look and let me know if you'd be available for a quick call to discuss further. Looking forward to connecting!
----
-
---- Follow-up sent 2026-01-07 ---
-Contact: Eshan at Alchemy
-Original message:
-Hey Eshan, just wanted to circle back on our previous chat about Alchemy's Solana infrastructure. Curious if you had a chance to take a look and let me know if you'd be available for a quick call to discuss further. Looking forward to connecting!
-
-Follow-up:
-Hey Eshan, just wanted to circle back on our Solana chat. Let me know if you have any questions or if there's anything I can help with!
----
-
---- Follow-up sent 2026-01-07 ---
-Contact: Eshan at Alchemy
-Original message:
-Hey Eshan, just wanted to circle back on our Solana chat. Let me know if you have any questions or if there's anything I can help with!
-
-Follow-up:
-Here's a brief, friendly follow-up message:
-
-Hey Eshan, just circling back on our Solana infrastructure discussion. Curious if you had any thoughts or if there's anything else I can provide to help? Let me know what works best for you.
 ---
 
 1. Latency
@@ -221,222 +126,27 @@ No pressure at all, just wanted to get this on your radar as we've seen these co
 
 
 
---- Message sent 2026-01-08 ---
-Contact: Leonard  Aster at Aster Protocol
-Message:
-Hey Leonard, congrats on the success over at Aster Protocol!
 
-I noticed you all are building a decentralized trading platform - that's super exciting. At Alchemy, we recently launched our new Transaction Engine that powers 70% of all bundled UserOps across the EVM. This enables gasless transactions and transaction bundling, which could be really useful for a DEX like Aster.
-
-Would you be open to a quick 15-minute call to discuss how our infrastructure could potentially help improve the user experience and scalability of your platform?
----
-
---- Follow-up sent 2026-01-08 ---
-Contact: Glenn | Alchemy at Alchemy
-Original message:
-Hey Glenn, congrats on the success over at Alchemy!
-
-I noticed you're a long-time crypto builder and advisor. I'd love to learn more about the work you're doing to support emerging web3 projects. Do you have any thoughts on how Alchemy's comprehensive blockchain infrastructure could help power your initiatives?
-
-Follow-up:
-Hey Glenn, just circling back on our previous chat. Curious if you had any thoughts or if there's anything else I can provide to help? Let me know what works best for you.
----
-
---- Message sent 2026-01-08 ---
-Contact: Eshan at Opensea
-Message:
-Hey Eshan, congrats on the success over at Opensea!
-
-I noticed you might be facing some infrastructure challenges on the Solana side. Would you be free for a quick 15-minute call next week to discuss how Alchemy's recent Solana architecture revamp could potentially help?
----
-
---- Follow-up sent 2026-01-08 ---
-Contact: Eshan at Opensea
-Original message:
-Hey Eshan, congrats on the success over at Opensea!
-
-I noticed you might be facing some infrastructure challenges on the Solana side. Would you be free for a quick 15-minute call next week to discuss how Alchemy's recent Solana architecture revamp could potentially help?
-
-Follow-up:
-Hey Eshan, just circling back on our Solana infrastructure discussion. Curious if you had any thoughts or if there's anything I can provide to help you out? Let me know what works best for you.
----
-
---- Follow-up sent 2026-01-08 ---
-Contact: Brian | Alchemy at Alchemy
-Original message:
-Hey Brian, congrats on the success over at Alchemy!
-
-I noticed you're the biz dev lead there - I'd love to learn more about how Alchemy is helping teams scale their blockchain infrastructure. Would you be open to a quick call to discuss how our new Cortex architecture could potentially benefit your customers?
-
-Follow-up:
-Hey Brian,
-
-Just circling back on our chat about Alchemy's new Cortex architecture - curious if you had any thoughts or if there's anything I can provide to help? Let me know what works best for you.
----
-
---- Message sent 2026-01-08 ---
-Contact: leeyong.ip at Story Protocol
-Message:
-Hey leeyong.ip, congrats on the success over at Story Protocol!
-
-I noticed you're working on building an AI-driven storytelling protocol. That's super exciting - we've been powering a lot of innovation in the AI/ML space with our Alchemy Data APIs.
-
-Would you be open to a quick call to discuss how Alchemy could potentially support your project?
----
-
---- Follow-up sent 2026-01-08 ---
-Contact: Brian | Alchemy at Alchemy
-Original message:
-Hey Brian,
-
-Just circling back on our chat about Alchemy's new Cortex architecture - curious if you had any thoughts or if there's anything I can provide to help? Let me know what works best for you.
-
-Follow-up:
-Hey Brian,
-
-Just checking in - any thoughts on how Alchemy's Cortex architecture could potentially help you and your team? Let me know if you have any other questions!
----
-
---- Follow-up sent 2026-01-08 ---
-Contact: Brian | Alchemy at Alchemy
-Original message:
-Hey Brian,
-
-Just checking in - any thoughts on how Alchemy's Cortex architecture could potentially help you and your team? Let me know if you have any other questions!
-
-Follow-up:
-Hey Brian,
-
-Just circling back on our Cortex chat - curious if you had any other thoughts or if there's anything else I can provide to help? Let me know what works best for you.
----
-
---- Follow-up sent 2026-01-08 ---
-Contact: Brian | Alchemy at Alchemy
-Original message:
-Hey Brian,
-
-Just circling back on our Cortex chat - curious if you had any other thoughts or if there's anything else I can provide to help? Let me know what works best for you.
-
-Follow-up:
-Hey Brian,
-
-Just checking in - any thoughts on how Alchemy's Cortex architecture could benefit your team? Let me know if you have any other questions!
----
-
---- Message sent 2026-01-08 ---
-Contact: Eshan at Opensea
-Message:
-Hey Eshan, congrats on the success over at Opensea!
-
-Yes, Opensea could use Alchemy's Node API to power their Solana infrastructure. Our recent Solana architecture revamp has enabled up to 5x lower latency and 90k+ RPS throughput for teams like you. Would you be open to a quick call to discuss how Alchemy could potentially support Opensea's scaling needs?
----
-
---- Follow-up sent 2026-01-09 ---
-Contact: Eshan at Opensea
-Original message:
-Hey Eshan, congrats on the success over at Opensea!
-
-I noticed you might be facing some infrastructure challenges on the Solana side. Would you be free for a quick 15-minute call next week to discuss how Alchemy's recent Solana architecture revamp could potentially help?
-
-Follow-up:
-Hey Eshan,
-
-Just circling back on our Solana infrastructure discussion. Curious if you had any thoughts or if there's anything I can provide to help? Let me know what works best for you.
----
 
 --- Message sent 2026-01-09 ---
-Contact: Eshan at Alchemy
+Contact: Javi at Hyperliquid
 Message:
-Hey Eshan, congrats on the success over at Alchemy!
+Hey Javi, congrats on the success over at Hyperliquid!
 
-I noticed you might be facing some infrastructure challenges on the node side. Would you be open to a quick call to discuss how Alchemy's recent Cortex architecture revamp could potentially help improve your node reliability and performance?
----
+I noticed you're the CEO - that's awesome. As a leading Web3 infrastructure provider, Alchemy has been working closely with CEOs like yourself to help scale and optimize their blockchain applications. 
 
---- Message sent 2026-01-09 ---
-Contact: Eshan at Opensea
-Message:
-Hey Eshan, congrats on the success over at Opensea!
-
-I noticed you might be facing some infrastructure challenges, particularly around your Solana node setup. Our team at Alchemy recently revamped our Solana architecture, enabling up to 5x lower latency and 90k+ RPS throughput. 
-
-Would you be open to a quick call to discuss how our Solana Node API could help improve the reliability and performance of your Opensea Solana infrastructure?
+One area I'm particularly excited about is our new Cortex architecture, which has enabled up to 5x lower latency across every chain we support. Given the real-time nature of your Hyperliquid platform, I'm curious if you've been exploring ways to improve the user experience through faster transaction processing? I'd be happy to walk through a quick demo of how our enhanced APIs and webhooks could benefit your team.
 ---
 
 --- Follow-up sent 2026-01-09 ---
-Contact: Eshan at Opensea
+Contact: Javi at Hyperliquid
 Original message:
-Hey Eshan, congrats on the success over at Opensea!
+Hey Javi, congrats on the success over at Hyperliquid!
 
-I noticed you might be facing some infrastructure challenges, particularly around your Solana node setup. Our team at Alchemy recently revamped our Solana architecture, enabling up to 5x lower latency and 90k+ RPS throughput. 
+I noticed you're the CEO - that's awesome. As a leading Web3 infrastructure provider, Alchemy has been working closely with CEOs like yourself to help scale and optimize their blockchain applications. 
 
-Would you be open to a quick call to discuss how our Solana Node API could help improve the reliability and performance of your Opensea Solana infrastructure?
+One area I'm particularly excited about is our new Cortex architecture, which has enabled up to 5x lower latency across every chain we support. Given the real-time nature of your Hyperliquid platform, I'm curious if you've been exploring ways to improve the user experience through faster transaction processing? I'd be happy to walk through a quick demo of how our enhanced APIs and webhooks could benefit your team.
 
 Follow-up:
-Hey Eshan, just circling back on our Solana infrastructure discussion. Curious if you had a chance to review and let me know if there's anything I can provide to help out. Whenever you're free, I'd be happy to walk through the details.
----
-
---- Follow-up sent 2026-01-09 ---
-Contact: Brian | Alchemy at Alchemy
-Original message:
-Hey Brian, congrats on the success over at Alchemy!
-
-I noticed you're the biz dev lead there - I'd love to learn more about how Alchemy is helping teams scale their blockchain infrastructure. Would you be open to a quick call to discuss how our new Cortex architecture could potentially benefit your customers?
-
-Follow-up:
-Hey Brian,
-
-Just circling back on our Cortex chat - curious if you had any thoughts on how it could potentially benefit your team? Let me know what works best for you.
----
-
---- Follow-up sent 2026-01-09 ---
-Contact: Glenn | Alchemy at Alchemy
-Original message:
-Hey Glenn, congrats on the success over at Alchemy!
-
-I noticed you're a long-time crypto builder and advisor. I'd love to learn more about the work you're doing to support emerging web3 projects. Do you have any thoughts on how Alchemy's comprehensive blockchain infrastructure could help power your initiatives?
-
-Follow-up:
-Hey Glenn, just circling back on our previous chat. Curious if you had any thoughts or if there's anything else I can provide to help? Let me know what works best for you.
----
-
---- Message sent 2026-01-09 ---
-Contact: dfinzer.eth | opensea at OpenSea
-Message:
-Hey dfinzer.eth, congrats on the success over at OpenSea!
-
-I noticed OpenSea is building on Solana - our team recently revamped our Solana infrastructure, enabling up to 5x lower latency and 90k+ RPS throughput. Would you be open to a quick chat about how Alchemy's Node API could help improve the reliability and performance of OpenSea's Solana deployment?
----
-
---- Follow-up sent 2026-01-09 ---
-Contact: dfinzer.eth | opensea at OpenSea
-Original message:
-Hey dfinzer.eth, congrats on the success over at OpenSea!
-
-I noticed OpenSea is building on Solana - our team recently revamped our Solana infrastructure, enabling up to 5x lower latency and 90k+ RPS throughput. Would you be open to a quick chat about how Alchemy's Node API could help improve the reliability and performance of OpenSea's Solana deployment?
-
-Follow-up:
-Hey dfinzer.eth,
-
-Just circling back on our Solana infrastructure chat - curious if you had a chance to take a look and let me know if there's anything I can provide to help? Looking forward to connecting.
----
-
---- Follow-up sent 2026-01-09 ---
-Contact: dfinzer.eth | opensea at OpenSea
-Original message:
-Hey dfinzer.eth,
-
-Just circling back on our Solana infrastructure chat - curious if you had a chance to take a look and let me know if there's anything I can provide to help? Looking forward to connecting.
-
-Follow-up:
-Hey dfinzer.eth,
-
-Just checking in on our Solana infrastructure discussion. Would love to hear your thoughts whenever you have a chance. Look forward to connecting!
----
-
---- Message sent 2026-01-09 ---
-Contact: Eshan at Opensea
-Message:
-Hey Eshan, congrats on the success over at Opensea!
-
-I noticed you might be facing some infrastructure challenges, particularly around your Solana node setup. Would you be open to a quick call to discuss how Alchemy's recent Solana architecture revamp could potentially help?
+Hey Javi, just wanted to circle back on my previous message about Alchemy's infrastructure capabilities. I know you and the team at Hyperliquid are laser-focused on delivering the best possible user experience, and I'd be happy to explore how our 5x latency improvements and multi-region redundancy could help enhance that. Let me know if you have 15 minutes this week to dive in!
 ---

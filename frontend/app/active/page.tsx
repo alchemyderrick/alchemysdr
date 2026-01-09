@@ -2,12 +2,36 @@
 
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api-client'
-import { Target } from '@/lib/types'
+import { toast } from 'sonner'
+import { Plus, Search as SearchIcon, Users } from 'lucide-react'
+import { ContactsModal } from '@/components/contacts-modal'
+
+interface TargetWithMessages extends Target {
+  messages_sent?: number
+}
+
+interface Target {
+  id: string
+  team_name: string
+  raised_usd: number
+  monthly_revenue_usd: number
+  is_web3: number
+  x_handle?: string
+  website?: string
+  notes?: string
+  status: string
+}
 
 export default function ActivePage() {
-  const [targets, setTargets] = useState<Target[]>([])
+  const [targets, setTargets] = useState<TargetWithMessages[]>([])
   const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [contactsModalOpen, setContactsModalOpen] = useState(false)
+  const [selectedTarget, setSelectedTarget] = useState<TargetWithMessages | null>(null)
+  const [contacts, setContacts] = useState<any[]>([])
 
   useEffect(() => {
     loadTargets()
@@ -15,9 +39,10 @@ export default function ActivePage() {
 
   const loadTargets = async () => {
     try {
-      const data = await api.get<Target[]>('/api/targets')
-      const approved = data.filter(t => t.status === 'approved')
-      setTargets(approved)
+      const data = await api.get<TargetWithMessages[]>('/api/targets/approved')
+      // Filter to only show targets WITH messages sent
+      const withMessages = data.filter(t => t.messages_sent && t.messages_sent > 0)
+      setTargets(withMessages)
     } catch (error) {
       console.error('Failed to load targets:', error)
     } finally {
@@ -25,36 +50,198 @@ export default function ActivePage() {
     }
   }
 
+  const handleDiscoverXUsers = async (targetId: string) => {
+    setActionLoading(targetId + '-x')
+    try {
+      toast.info('Discovering X users...')
+      const result = await api.post(`/api/targets/${targetId}/discover-x-users`, { max_users: 5 })
+      toast.success(`Found ${result.valid} valid users! Check the queue.`)
+    } catch (error) {
+      toast.error('Failed to discover X users')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleSearchAllContacts = async (targetId: string, teamName: string) => {
+    setActionLoading(targetId + '-search')
+    try {
+      toast.info('Searching for contacts...')
+      const result = await api.post(`/api/targets/${targetId}/all-contacts`, {})
+      if (result.stored === 0) {
+        toast.info('All contacts found - no new contacts to add')
+      } else {
+        toast.success(`Found ${result.stored} new contacts for ${teamName}!`)
+      }
+    } catch (error) {
+      toast.error('Failed to search contacts')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleViewContacts = async (target: TargetWithMessages) => {
+    setActionLoading(target.id + '-view')
+    try {
+      toast.info('Loading contacts...')
+      const result = await api.get(`/api/targets/${target.id}/view-contacts`)
+      if (result.contacts.length === 0) {
+        toast.info('No contacts found yet. Click "Search" to find contacts.')
+      } else {
+        setSelectedTarget(target)
+        setContacts(result.contacts)
+        setContactsModalOpen(true)
+      }
+    } catch (error) {
+      toast.error('Failed to load contacts')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const formatMoney = (n: number) => {
+    const abs = Math.abs(n)
+    if (abs >= 1e9) return `$${(n / 1e9).toFixed(1)}B`
+    if (abs >= 1e6) return `$${(n / 1e6).toFixed(1)}M`
+    if (abs >= 1e3) return `$${Math.round(n / 1e3)}k`
+    return `$${Math.round(n)}`
+  }
+
   return (
-    <div className="p-10 max-w-7xl mx-auto">
-      <Card>
+    <div className="p-8 md:p-12 max-w-7xl mx-auto">
+      <Card className="border border-success/50 rounded-xl bg-card/50 backdrop-blur-sm">
         <CardHeader>
-          <CardTitle>Active Outreach</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Approved targets ready for outreach
-          </p>
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-success/10 text-success">
+              <span className="text-2xl">✅</span>
+            </div>
+            <div>
+              <CardTitle className="text-xl text-foreground">Active Outreach</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Teams with messages sent
+              </p>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="text-muted-foreground">Loading...</div>
           ) : targets.length === 0 ? (
             <div className="text-muted-foreground">
-              No active outreach targets. Approve some targets to get started.
+              No active outreach yet. Send some messages to get started.
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="grid gap-4">
               {targets.map((target) => (
-                <div key={target.id} className="border rounded p-3">
-                  <div className="font-semibold">{target.team_name}</div>
-                  {target.notes && (
-                    <div className="text-sm text-muted-foreground">{target.notes}</div>
+                <div key={target.id} className="border border-border/50 rounded-lg p-4 space-y-3 hover:border-success/30 hover:shadow-lg transition-all bg-card/30">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold text-foreground">{target.team_name}</div>
+                    <Badge className="bg-success/10 text-success border-success/30">
+                      {target.messages_sent} message{target.messages_sent !== 1 ? 's' : ''} sent
+                    </Badge>
+                  </div>
+
+                  {(target.x_handle || target.website) && (
+                    <div className="flex gap-2 flex-wrap">
+                      {target.x_handle && (
+                        <a
+                          href={`https://x.com/${target.x_handle.replace('@', '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-primary hover:underline"
+                        >
+                          @{target.x_handle.replace('@', '')}
+                        </a>
+                      )}
+                      {target.website && (
+                        <a
+                          href={target.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-success hover:underline"
+                        >
+                          🌐 website
+                        </a>
+                      )}
+                    </div>
                   )}
+
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge className="bg-amber/10 text-amber border-amber/30">
+                      Raised: {formatMoney(target.raised_usd)}
+                    </Badge>
+                    <Badge className="bg-amber/10 text-amber border-amber/30">
+                      Rev: {formatMoney(target.monthly_revenue_usd)}/mo
+                    </Badge>
+                  </div>
+
+                  {target.notes && (
+                    <p className="text-xs text-muted-foreground">{target.notes}</p>
+                  )}
+
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-border/50 hover:bg-primary/10 hover:border-primary"
+                      onClick={() => {
+                        toast.info('Quick add feature coming soon')
+                      }}
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      Add
+                    </Button>
+
+                    {target.x_handle && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-border/50 hover:bg-cyan-500/10 hover:border-cyan-500"
+                        onClick={() => handleDiscoverXUsers(target.id)}
+                        disabled={actionLoading === target.id + '-x'}
+                      >
+                        🐦 X
+                      </Button>
+                    )}
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-border/50 hover:bg-success/10 hover:border-success"
+                      onClick={() => handleSearchAllContacts(target.id, target.team_name)}
+                      disabled={actionLoading === target.id + '-search'}
+                    >
+                      <SearchIcon className="mr-1 h-3 w-3" />
+                      Search
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-border/50 hover:bg-purple/10 hover:border-purple"
+                      onClick={() => handleViewContacts(target)}
+                      disabled={actionLoading === target.id + '-view'}
+                    >
+                      <Users className="mr-1 h-3 w-3" />
+                      View
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {selectedTarget && (
+        <ContactsModal
+          open={contactsModalOpen}
+          onOpenChange={setContactsModalOpen}
+          teamName={selectedTarget.team_name}
+          teamId={selectedTarget.id}
+          contacts={contacts}
+        />
+      )}
     </div>
   )
 }

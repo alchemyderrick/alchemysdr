@@ -8,21 +8,30 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api-client'
 import { DraftWithContact } from '@/lib/types'
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, X, Loader2 } from 'lucide-react'
+import { FollowupModal } from './followup-modal'
+import { toast } from 'sonner'
 
-export function SentMessagesCard() {
+interface SentMessagesCardProps {
+  refreshTrigger?: number
+}
+
+export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
   const [drafts, setDrafts] = useState<DraftWithContact[]>([])
   const [loading, setLoading] = useState(true)
+  const [followupModalOpen, setFollowupModalOpen] = useState(false)
+  const [selectedDraft, setSelectedDraft] = useState<DraftWithContact | null>(null)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   useEffect(() => {
     loadSentMessages()
-  }, [])
+  }, [refreshTrigger])
 
   const loadSentMessages = async () => {
     try {
-      const data = await api.get<DraftWithContact[]>('/api/drafts')
-      const sent = data.filter(d => d.status === 'sent').slice(0, 10)
-      setDrafts(sent)
+      // Use /sent endpoint which excludes contacts that have follow-ups
+      const data = await api.get<DraftWithContact[]>('/api/drafts/sent')
+      setDrafts(data.slice(0, 10))
     } catch (error) {
       console.error('Failed to load sent messages:', error)
     } finally {
@@ -30,14 +39,41 @@ export function SentMessagesCard() {
     }
   }
 
+  const handleFollowupClick = (draft: DraftWithContact) => {
+    setSelectedDraft(draft)
+    setFollowupModalOpen(true)
+  }
+
+  const handleFollowupSuccess = () => {
+    loadSentMessages()
+  }
+
+  const handleDismiss = async (id: string) => {
+    setActionLoading(id)
+    try {
+      await api.post(`/api/drafts/${id}/skip`, {})
+      toast.success('Message dismissed')
+      loadSentMessages()
+    } catch (error) {
+      toast.error('Failed to dismiss message')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   return (
-    <Card className="flex flex-col h-[380px] min-h-[380px] max-h-[380px]">
-      <CardHeader className="pb-3 shrink-0">
-        <CardTitle className="text-base">Sent Messages</CardTitle>
-        <CardDescription className="text-xs">Recent outreach messages successfully delivered</CardDescription>
+    <Card className="relative overflow-hidden flex flex-col border border-success/50 rounded-xl bg-card/50 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:shadow-success/20 hover:border-success/80 group">
+      <CardHeader className="pb-4 shrink-0">
+        <CardTitle className="text-base flex items-center gap-2 text-foreground">
+          <div className="p-1.5 rounded-lg bg-success/10 text-success">
+            <MessageCircle className="h-4 w-4" />
+          </div>
+          Sent Messages
+        </CardTitle>
+        <CardDescription className="text-xs text-muted-foreground">Recent outreach messages successfully delivered</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 p-4">
-        <ScrollArea className="h-full">
+      <CardContent className="flex-1 p-4 overflow-hidden">
+        <ScrollArea className="h-full pr-4">
           {loading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
@@ -60,29 +96,62 @@ export function SentMessagesCard() {
           ) : (
             <div className="space-y-4">
               {drafts.map((draft) => (
-                <div key={draft.id} className="border rounded-lg p-4 space-y-3">
+                <div key={draft.id} className="border border-border/50 rounded-lg p-4 space-y-3 hover:border-success/30 transition-all bg-card/30">
                   <div className="flex items-center justify-between">
-                    <div className="font-semibold">{draft.name}</div>
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
+                    <div className="font-semibold text-foreground">{draft.name}</div>
+                    <Badge className="bg-success/10 text-success border-success/30 text-xs px-2 py-0.5">
                       sent
                     </Badge>
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {draft.company} • @{draft.telegram_handle}
                   </div>
-                  <div className="text-sm bg-muted/50 p-3 rounded-md line-clamp-3">
+                  <div className="text-sm bg-background/50 p-3 rounded-md line-clamp-3 border border-border/30">
                     {draft.message_text}
                   </div>
-                  <Button variant="outline" size="sm" className="w-full">
-                    <MessageCircle className="mr-2 h-4 w-4" />
-                    Send Follow-up
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 hover:bg-success/10 hover:border-success hover:text-success transition-all border-border/50"
+                      onClick={() => handleFollowupClick(draft)}
+                      disabled={actionLoading === draft.id}
+                    >
+                      <MessageCircle className="mr-2 h-4 w-4" />
+                      Send Follow-up
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="hover:bg-destructive/10 hover:border-destructive hover:text-destructive transition-all border-border/50"
+                      onClick={() => handleDismiss(draft.id)}
+                      disabled={actionLoading === draft.id}
+                    >
+                      {actionLoading === draft.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <X className="mr-2 h-4 w-4" />
+                          Dismiss
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </ScrollArea>
       </CardContent>
+
+      {selectedDraft && (
+        <FollowupModal
+          open={followupModalOpen}
+          onOpenChange={setFollowupModalOpen}
+          draft={selectedDraft}
+          onSuccess={handleFollowupSuccess}
+        />
+      )}
     </Card>
   )
 }

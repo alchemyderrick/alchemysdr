@@ -71,21 +71,28 @@ export default function TargetsPage() {
   }
 
   return (
-    <div className="p-10 max-w-7xl mx-auto">
-      <Card>
+    <div className="p-8 md:p-12 max-w-7xl mx-auto">
+      <Card className="border border-primary/50 rounded-xl bg-card/50 backdrop-blur-sm">
         <CardHeader>
-          <CardTitle>Top Target Teams</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Web3 teams with ≥ $10M raised OR ≥ $500k monthly revenue
-          </p>
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+              <span className="text-2xl">🎯</span>
+            </div>
+            <div>
+              <CardTitle className="text-xl text-foreground">Top Target Teams</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Web3 teams with ≥ $10M raised OR ≥ $500k monthly revenue
+              </p>
+            </div>
+          </div>
           <div className="flex gap-2 mt-4">
-            <Button variant="outline" onClick={loadTargets}>
+            <Button variant="outline" onClick={loadTargets} className="border-border/50 hover:bg-primary/10 hover:border-primary">
               Refresh
             </Button>
-            <Button onClick={handleResearch} disabled={loading}>
+            <Button onClick={handleResearch} disabled={loading} className="bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">
               🔍 Research
             </Button>
-            <Button variant="outline">
+            <Button variant="outline" className="border-border/50 hover:bg-primary/10 hover:border-primary">
               + Import
             </Button>
           </div>
@@ -98,13 +105,13 @@ export default function TargetsPage() {
               No pending targets. Click Research to find new targets.
             </div>
           ) : (
-            <div className="grid gap-3">
+            <div className="grid gap-4">
               {targets.map((target) => (
-                <div key={target.id} className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow">
-                  <div className="font-semibold flex items-center justify-between">
+                <div key={target.id} className="border border-border/50 rounded-lg p-4 space-y-3 hover:border-primary/30 hover:shadow-lg transition-all bg-card/30">
+                  <div className="font-semibold flex items-center justify-between text-foreground">
                     <span>{target.team_name}</span>
                     {target.is_web3 === 1 && (
-                      <Badge variant="secondary">Web3</Badge>
+                      <Badge className="bg-primary/10 text-primary border-primary/30">Web3</Badge>
                     )}
                   </div>
 
@@ -125,7 +132,7 @@ export default function TargetsPage() {
                           href={target.website}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-green-600 hover:underline"
+                          className="text-xs text-success hover:underline"
                         >
                           🌐 website
                         </a>
@@ -134,10 +141,10 @@ export default function TargetsPage() {
                   )}
 
                   <div className="flex gap-2 flex-wrap">
-                    <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900 dark:text-amber-100">
+                    <Badge className="bg-amber/10 text-amber border-amber/30">
                       Raised: {formatMoney(target.raised_usd)}
                     </Badge>
-                    <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900 dark:text-amber-100">
+                    <Badge className="bg-amber/10 text-amber border-amber/30">
                       Rev: {formatMoney(target.monthly_revenue_usd)}/mo
                     </Badge>
                   </div>
@@ -147,10 +154,10 @@ export default function TargetsPage() {
                   )}
 
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => handleDismiss(target.id)}>
+                    <Button size="sm" variant="outline" onClick={() => handleDismiss(target.id)} className="hover:bg-destructive/10 hover:border-destructive hover:text-destructive border-border/50">
                       ✕ Dismiss
                     </Button>
-                    <Button size="sm" onClick={() => handleApprove(target.id)}>
+                    <Button size="sm" onClick={() => handleApprove(target.id)} className="bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">
                       ✓ Approve
                     </Button>
                   </div>
