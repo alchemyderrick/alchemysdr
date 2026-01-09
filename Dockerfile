@@ -1,5 +1,5 @@
-# Use Node.js 18 base image
-FROM node:18
+# Use Node.js 20 base image
+FROM node:20-slim
 
 # Install system dependencies for Puppeteer and better-sqlite3
 RUN apt-get update && apt-get install -y \
@@ -42,14 +42,19 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 # Create app directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files for both root and frontend
 COPY package*.json ./
+COPY frontend/package*.json ./frontend/
 
-# Install dependencies
-RUN npm ci --omit=dev || npm install --production
+# Install all dependencies (including devDependencies needed for build)
+RUN npm install
+RUN cd frontend && npm install
 
 # Copy application code
 COPY . .
+
+# Build frontend with production settings
+RUN NODE_ENV=production npm run build
 
 # Create data directory for persistent storage
 RUN mkdir -p /app/data

@@ -17,7 +17,10 @@ import {
   pasteIntoTelegram,
   scheduleTelegramAutoSend,
   cancelTelegramAutoSend,
+  splitIntoParagraphs,
+  sendMultiParagraphMessage,
   generateOutbound,
+  generateOutboundWithFeedback,
   generateFollowUp,
   anthropic,
   CLAUDE_MODEL,
@@ -1044,12 +1047,15 @@ app.use("/api/drafts", createDraftRoutes(
   nowISO,
   tgLinks,
   generateOutbound,
+  generateOutboundWithFeedback,
   generateFollowUp,
   setClipboardMac,
   openTelegramDesktopLink,
   pasteIntoTelegram,
   scheduleTelegramAutoSend,
-  cancelTelegramAutoSend
+  cancelTelegramAutoSend,
+  splitIntoParagraphs,
+  sendMultiParagraphMessage
 ));
 
 // Initialize WorkflowEngine
@@ -1181,6 +1187,20 @@ app.use("/api/targets", targetDiscoveryRouter);
   // Make available globally
   global.ALCHEMY_DATA_INFO = ALCHEMY_DATA_INFO;
   global.ALCHEMY_NODE_INFO = ALCHEMY_NODE_INFO;
+
+  // Catch-all route for client-side routing (must be after all API routes)
+  if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+    app.use((req, res) => {
+      // Only handle GET requests for non-API routes
+      if (req.method === 'GET' && !req.path.startsWith('/api')) {
+        const nextIndexPath = path.join(process.cwd(), 'frontend', 'out', 'index.html');
+        if (fs.existsSync(nextIndexPath)) {
+          return res.sendFile(nextIndexPath);
+        }
+      }
+      res.status(404).send('Page not found');
+    });
+  }
 
   const port = Number(process.env.PORT || 3000);
   app.listen(port, () => {

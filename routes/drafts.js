@@ -11,12 +11,15 @@ export function createDraftRoutes(
   nowISO,
   tgLinks,
   generateOutbound,
+  generateOutboundWithFeedback,
   generateFollowUp,
   setClipboardMac,
   openTelegramDesktopLink,
   pasteIntoTelegram,
   scheduleTelegramAutoSend,
-  cancelTelegramAutoSend
+  cancelTelegramAutoSend,
+  splitIntoParagraphs,
+  sendMultiParagraphMessage
 ) {
   const router = Router();
 
@@ -64,21 +67,41 @@ export function createDraftRoutes(
   router.post("/:id/regenerate", async (req, res) => {
     try {
       const { id } = req.params;
+      const { feedback } = req.body;
+
       const draft = db.prepare(
         `SELECT d.*, c.* FROM drafts d JOIN contacts c ON d.contact_id = c.id WHERE d.id = ?`
       ).get(id);
       if (!draft) return res.status(404).json({ error: "draft not found" });
 
       console.log(`🔄 Regenerating message for ${draft.name} at ${draft.company}`);
+      if (feedback) {
+        console.log(`📝 User feedback: "${feedback}"`);
+      }
 
-      // Generate a new message with regenerate flag for variety
-      const message_text = await generateOutbound(draft, true);
+      // Store previous message for feedback history
+      const previousMessage = draft.message_text;
+
+      // Generate new message (with or without feedback)
+      const message_text = feedback
+        ? await generateOutboundWithFeedback(draft, feedback)
+        : await generateOutbound(draft, true);
 
       // Update the draft with new message
       const ts = nowISO();
       db.prepare(
         `UPDATE drafts SET message_text = ?, updated_at = ? WHERE id = ?`
       ).run(message_text, ts, id);
+
+      // If feedback was provided, save to feedback history
+      if (feedback) {
+        const feedbackId = nanoid();
+        db.prepare(
+          `INSERT INTO draft_feedback (id, draft_id, feedback_text, previous_message, regenerated_message, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        ).run(feedbackId, id, feedback, previousMessage, message_text, ts);
+        console.log(`✅ Saved feedback history (ID: ${feedbackId})`);
+      }
 
       res.json({ message_text });
     } catch (e) {
@@ -173,6 +196,25 @@ export function createDraftRoutes(
     res.json({ ok: true });
   });
 
+  // Update draft message
+  router.patch("/:id", (req, res) => {
+    const { id } = req.params;
+    const { message_text } = req.body;
+
+    if (!message_text || typeof message_text !== "string") {
+      return res.status(400).json({ error: "message_text is required" });
+    }
+
+    const info = db.prepare(`UPDATE drafts SET message_text = ?, updated_at = ? WHERE id = ?`)
+      .run(message_text.trim(), nowISO(), id);
+
+    if (info.changes === 0) {
+      return res.status(404).json({ error: "draft not found" });
+    }
+
+    res.json({ ok: true, message_text: message_text.trim() });
+  });
+
   // Approve, open Telegram, and paste message
   router.post("/:id/approve-open-telegram", async (req, res) => {
     try {
@@ -250,12 +292,37 @@ export function createDraftRoutes(
         // Don't fail the request if webhook fails
       }
 
-      setClipboardMac(textToSend);
+      // LOCAL MAC AUTOMATION BEGINS HERE
       openTelegramDesktopLink(row.telegram_handle);
-      await new Promise((r) => setTimeout(r, 700));
-      await pasteIntoTelegram();
-      scheduleTelegramAutoSend(id);
-      res.json({ ok: true, auto_send: AUTO_SEND_ENABLED, auto_send_after_seconds: AUTO_SEND_IDLE_SECONDS });
+      await new Promise((r) => setTimeout(r, 1000)); // Slightly longer wait for Telegram to fully load
+
+      // Split message into paragraphs and send each separately
+      const paragraphs = splitIntoParagraphs(textToSend);
+      console.log(`📝 Message has ${paragraphs.length} paragraph(s)`);
+
+      if (paragraphs.length === 0) {
+        throw new Error("No paragraphs found in message");
+      }
+
+      if (paragraphs.length === 1) {
+        // Single paragraph: use original flow for simplicity
+        console.log("📤 Sending single paragraph message");
+        setClipboardMac(textToSend);
+        await pasteIntoTelegram();
+        scheduleTelegramAutoSend(id);
+      } else {
+        // Multiple paragraphs: send each separately
+        console.log(`📤 Sending ${paragraphs.length} paragraphs as separate messages`);
+        await sendMultiParagraphMessage(paragraphs);
+        // No scheduleTelegramAutoSend() needed - each paragraph sent immediately
+      }
+
+      res.json({
+        ok: true,
+        paragraph_count: paragraphs.length,
+        auto_send: paragraphs.length === 1 ? AUTO_SEND_ENABLED : false,
+        auto_send_after_seconds: paragraphs.length === 1 ? AUTO_SEND_IDLE_SECONDS : 0
+      });
     } catch (e) {
       console.error("approve-open-telegram error:", e?.message || e, e?.stderr || "");
       res.status(500).json({

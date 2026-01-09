@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api-client'
 import { DraftWithContact } from '@/lib/types'
-import { History, MessageCircle, X } from 'lucide-react'
+import { History, MessageCircle, X, Sparkles } from 'lucide-react'
 import { ConversationHistoryModal } from '@/components/conversation-history-modal'
 import { FollowupModal } from '@/components/followup-modal'
+import { ImproveMessageModal } from '@/components/improve-message-modal'
 import { SentMessagesCard } from '@/components/sent-messages-card'
 import { toast } from 'sonner'
 
@@ -28,6 +30,9 @@ export default function FollowupsPage() {
   const [selectedContact, setSelectedContact] = useState<DraftWithContact | null>(null)
   const [selectedDraft, setSelectedDraft] = useState<DraftWithContact | null>(null)
   const [sentMessagesRefresh, setSentMessagesRefresh] = useState(0)
+  const [improvingDraft, setImprovingDraft] = useState<DraftWithContact | null>(null)
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null)
+  const [editedMessages, setEditedMessages] = useState<Record<string, string>>({})
 
   useEffect(() => {
     loadFollowups()
@@ -120,6 +125,21 @@ export default function FollowupsPage() {
     setSentMessagesRefresh(prev => prev + 1)
   }
 
+  const handleImproveMessage = (draft: DraftWithContact) => {
+    setImprovingDraft(draft)
+  }
+
+  const handleImproveSuccess = (draftId: string, newMessage: string) => {
+    // Update the draft in local state
+    setContactGroups(prev => prev.map(group => ({
+      ...group,
+      followUps: group.followUps.map(draft =>
+        draft.id === draftId ? { ...draft, message_text: newMessage } : draft
+      )
+    })))
+    // Don't close modal - let user close it manually after reviewing the improved message
+  }
+
   return (
     <div className="p-8 md:p-12 max-w-7xl mx-auto">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -169,12 +189,31 @@ export default function FollowupsPage() {
                     </div>
 
                     {/* Preview of most recent follow-up */}
-                    <div className="text-sm bg-background/50 p-3 rounded-md border border-border/30 line-clamp-3">
-                      {mostRecent.message_text}
-                    </div>
+                    <Textarea
+                      value={editedMessages[mostRecent.id] ?? mostRecent.message_text}
+                      onChange={(e) => {
+                        setEditedMessages(prev => ({
+                          ...prev,
+                          [mostRecent.id]: e.target.value
+                        }))
+                      }}
+                      onFocus={() => setEditingDraftId(mostRecent.id)}
+                      onBlur={() => setEditingDraftId(null)}
+                      className="text-sm bg-background/50 min-h-[150px] max-h-48 resize-none"
+                    />
 
                     {/* Action buttons */}
                     <div className="flex gap-2 flex-wrap">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleImproveMessage(mostRecent)}
+                        className="border-border/50 hover:bg-primary/10 hover:border-primary hover:text-primary"
+                        title="Improve message with feedback"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                      </Button>
+
                       <Button
                         size="sm"
                         variant="outline"
@@ -230,6 +269,17 @@ export default function FollowupsPage() {
             onOpenChange={setFollowupModalOpen}
             draft={selectedDraft}
             onSuccess={handleFollowupSuccess}
+          />
+        )}
+
+        {improvingDraft && (
+          <ImproveMessageModal
+            open={!!improvingDraft}
+            onOpenChange={(open) => {
+              if (!open) setImprovingDraft(null)
+            }}
+            draft={improvingDraft}
+            onSuccess={(newMessage) => handleImproveSuccess(improvingDraft.id, newMessage)}
           />
         )}
       </Card>

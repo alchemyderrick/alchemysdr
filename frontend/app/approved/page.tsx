@@ -5,20 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api-client'
+import { Target } from '@/lib/types'
 import { toast } from 'sonner'
 import { Plus, Search as SearchIcon, Users } from 'lucide-react'
 import { ContactsModal } from '@/components/contacts-modal'
+import { EditTargetModal } from '@/components/edit-target-modal'
 
-interface TargetWithMessages {
-  id: string
-  team_name: string
-  raised_usd: number
-  monthly_revenue_usd: number
-  is_web3: number
-  x_handle?: string
-  website?: string
-  notes?: string
-  status: string
+interface TargetWithMessages extends Target {
   messages_sent?: number
 }
 
@@ -29,6 +22,8 @@ export default function ApprovedPage() {
   const [contactsModalOpen, setContactsModalOpen] = useState(false)
   const [selectedTarget, setSelectedTarget] = useState<TargetWithMessages | null>(null)
   const [contacts, setContacts] = useState<any[]>([])
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [selectedTargetForEdit, setSelectedTargetForEdit] = useState<Target | null>(null)
 
   useEffect(() => {
     loadTargets()
@@ -132,7 +127,15 @@ export default function ApprovedPage() {
               {targets.map((target) => (
                 <div key={target.id} className="border border-border/50 rounded-lg p-4 space-y-3 hover:border-purple/30 hover:shadow-lg transition-all bg-card/30">
                   <div className="flex items-center justify-between">
-                    <div className="font-semibold text-foreground">{target.team_name}</div>
+                    <button
+                      onClick={() => {
+                        setSelectedTargetForEdit(target as Target)
+                        setEditModalOpen(true)
+                      }}
+                      className="font-semibold text-foreground hover:text-primary hover:underline transition-colors text-left"
+                    >
+                      {target.team_name}
+                    </button>
                     {target.is_web3 === 1 && (
                       <Badge className="bg-primary/10 text-primary border-primary/30">Web3</Badge>
                     )}
@@ -238,6 +241,15 @@ export default function ApprovedPage() {
           teamName={selectedTarget.team_name}
           teamId={selectedTarget.id}
           contacts={contacts}
+        />
+      )}
+
+      {selectedTargetForEdit && (
+        <EditTargetModal
+          open={editModalOpen}
+          onOpenChange={setEditModalOpen}
+          target={selectedTargetForEdit}
+          onSuccess={loadTargets}
         />
       )}
     </div>

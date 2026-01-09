@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api-client'
 import { DraftWithContact } from '@/lib/types'
-import { MessageCircle, X, Loader2 } from 'lucide-react'
+import { MessageCircle, X, Loader2, Sparkles } from 'lucide-react'
 import { FollowupModal } from './followup-modal'
+import { ImproveMessageModal } from './improve-message-modal'
 import { toast } from 'sonner'
 
 interface SentMessagesCardProps {
@@ -22,6 +24,9 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
   const [followupModalOpen, setFollowupModalOpen] = useState(false)
   const [selectedDraft, setSelectedDraft] = useState<DraftWithContact | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [improvingDraft, setImprovingDraft] = useState<DraftWithContact | null>(null)
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null)
+  const [editedMessages, setEditedMessages] = useState<Record<string, string>>({})
 
   useEffect(() => {
     loadSentMessages()
@@ -59,6 +64,18 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
     } finally {
       setActionLoading(null)
     }
+  }
+
+  const handleImproveMessage = (draft: DraftWithContact) => {
+    setImprovingDraft(draft)
+  }
+
+  const handleImproveSuccess = (draftId: string, newMessage: string) => {
+    // Update the draft in local state
+    setDrafts(prev => prev.map(draft =>
+      draft.id === draftId ? { ...draft, message_text: newMessage } : draft
+    ))
+    // Don't close modal - let user close it manually after reviewing the improved message
   }
 
   return (
@@ -106,10 +123,29 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
                   <div className="text-sm text-muted-foreground">
                     {draft.company} • @{draft.telegram_handle}
                   </div>
-                  <div className="text-sm bg-background/50 p-3 rounded-md line-clamp-3 border border-border/30">
-                    {draft.message_text}
-                  </div>
+                  <Textarea
+                    value={editedMessages[draft.id] ?? draft.message_text}
+                    onChange={(e) => {
+                      setEditedMessages(prev => ({
+                        ...prev,
+                        [draft.id]: e.target.value
+                      }))
+                    }}
+                    onFocus={() => setEditingDraftId(draft.id)}
+                    onBlur={() => setEditingDraftId(null)}
+                    className="text-sm bg-background/50 min-h-[150px] max-h-48 resize-none"
+                  />
                   <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleImproveMessage(draft)}
+                      disabled={actionLoading === draft.id}
+                      className="hover:bg-primary/10 hover:border-primary hover:text-primary transition-all border-border/50"
+                      title="Improve message with feedback"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -150,6 +186,17 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
           onOpenChange={setFollowupModalOpen}
           draft={selectedDraft}
           onSuccess={handleFollowupSuccess}
+        />
+      )}
+
+      {improvingDraft && (
+        <ImproveMessageModal
+          open={!!improvingDraft}
+          onOpenChange={(open) => {
+            if (!open) setImprovingDraft(null)
+          }}
+          draft={improvingDraft}
+          onSuccess={(newMessage) => handleImproveSuccess(improvingDraft.id, newMessage)}
         />
       )}
     </Card>

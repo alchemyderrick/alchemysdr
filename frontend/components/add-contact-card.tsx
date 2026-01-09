@@ -64,7 +64,7 @@ export function AddContactCard({ onRefresh }: AddContactCardProps) {
         <CardDescription className="text-xs text-muted-foreground">Create a new contact and generate an outreach draft</CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
-        <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-2">
+        <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="flex flex-col space-y-2 h-full">
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label htmlFor="name" className="text-xs">Name *</Label>
@@ -112,33 +112,26 @@ export function AddContactCard({ onRefresh }: AddContactCardProps) {
             />
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              type="submit"
-              disabled={loading}
-              className="flex-1 h-9 text-sm bg-purple hover:bg-purple/90 text-white border-0 shadow-lg shadow-purple/20 hover:shadow-xl hover:shadow-purple/30 transition-all"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                  Adding...
-                </>
-              ) : (
-                <>
-                  <Plus className="mr-1 h-3 w-3" />
-                  Add + Draft
-                </>
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onRefresh}
-              className="h-9 w-9 p-0 hover:bg-purple/10 hover:border-purple transition-all border-border"
-            >
-              <RefreshCw className="h-3 w-3" />
-            </Button>
-          </div>
+          {/* Spacer to align with Discover X card button */}
+          <div className="h-[30px]"></div>
+
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full h-9 text-sm bg-purple hover:bg-purple/90 text-white border-0 shadow-lg shadow-purple/20 hover:shadow-xl hover:shadow-purple/30 transition-all"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                Adding...
+              </>
+            ) : (
+              <>
+                <Plus className="mr-2 h-3 w-3" />
+                Create Draft
+              </>
+            )}
+          </Button>
         </form>
       </CardContent>
     </Card>

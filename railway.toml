@@ -1,18 +1,19 @@
 # Railway Service Configuration
-# This deploys both the Express API and React frontend
+# This deploys the SDR Console with Express API and Next.js frontend
 
 [build]
-builder = "NIXPACKS"
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "npm run build && npm start"
+startCommand = "npm start"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
-[[services]]
-name = "sdr-console-backend"
+[service]
+name = "sdr-console"
 
-[services.healthcheck]
-path = "/api/health/claude"
+[service.healthcheck]
+path = "/"
 timeout = 100
 interval = 30

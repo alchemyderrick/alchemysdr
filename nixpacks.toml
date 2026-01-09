@@ -1,7 +1,16 @@
 # Nixpacks configuration for Railway
 
 [phases.setup]
-nixPkgs = ["nodejs_18", "chromium"]
+nixPkgs = ["nodejs_20", "chromium"]
+
+[phases.install]
+cmds = [
+  "npm install --include=dev",
+  "cd frontend && npm install --include=dev && cd .."
+]
+
+[phases.build]
+cmds = ["NODE_ENV=production npm run build"]
 
 [start]
-cmd = "npm run build && npm start"
+cmd = "npm start"
