@@ -7,6 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "node server.js",
     "runner": "node runner.js",
+    "build": "cd frontend && npm install && npm run build && cd ..",
     "start": "node server.js",
     "relayer": "node relayer-client.js"
   },

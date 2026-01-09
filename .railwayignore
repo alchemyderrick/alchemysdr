@@ -7,9 +7,11 @@
 # Node modules (will be reinstalled)
 node_modules/
 
-# Frontend (deployed separately)
+# Frontend build artifacts (will be rebuilt on Railway)
 frontend/.next/
 frontend/node_modules/
+
+# Keep frontend/out for static export (don't ignore it)
 
 # Local data
 data.db

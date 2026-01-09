@@ -44,6 +44,21 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files from current directory
 app.use(express.static(process.cwd()));
 
+// In production/Railway, serve Next.js static export
+if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+  const frontendOutPath = path.join(process.cwd(), 'frontend', 'out');
+
+  // Check if Next.js static export exists
+  if (fs.existsSync(frontendOutPath)) {
+    console.log("📦 Serving Next.js static export from frontend/out");
+
+    // Serve Next.js static files with priority
+    app.use(express.static(frontendOutPath, { index: false }));
+  } else {
+    console.log("⚠️ Next.js static export not found at frontend/out");
+  }
+}
+
 // Initialize database
 const db = initializeDatabase();
 
@@ -57,14 +72,26 @@ if (apolloApiKey) {
   console.log("⚠️ Apollo API key not configured (will use Claude fallback only)");
 }
 
-// Serve main HTML UI
+// Serve main UI
 app.get("/", (req, res) => {
-  // In production/Railway, redirect to React frontend if FRONTEND_URL is set
-  if ((process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) && process.env.FRONTEND_URL) {
-    return res.redirect(process.env.FRONTEND_URL);
+  // In production/Railway, serve Next.js static export if available
+  if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+    const nextIndexPath = path.join(process.cwd(), 'frontend', 'out', 'index.html');
+
+    if (fs.existsSync(nextIndexPath)) {
+      return res.sendFile(nextIndexPath);
+    }
+
+    // Fallback: redirect to FRONTEND_URL if set
+    if (process.env.FRONTEND_URL) {
+      return res.redirect(process.env.FRONTEND_URL);
+    }
+
+    // Last resort: serve HTML UI
+    console.log("⚠️ Next.js export not found, serving HTML UI");
   }
 
-  // Otherwise serve HTML UI
+  // In development, serve HTML UI (localhost:3000)
   res.setHeader("Content-Type", "text/html");
   res.send(getHtmlTemplate());
 });
