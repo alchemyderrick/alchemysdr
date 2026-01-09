@@ -1,7 +1,7 @@
 # Use Node.js 18 base image
-FROM node:18-slim
+FROM node:18
 
-# Install Chromium and dependencies for Puppeteer
+# Install system dependencies for Puppeteer and better-sqlite3
 RUN apt-get update && apt-get install -y \
     chromium \
     ca-certificates \
@@ -21,6 +21,9 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     xdg-utils \
     libgbm1 \
+    python3 \
+    make \
+    g++ \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
@@ -34,8 +37,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (no secrets needed here)
-RUN npm install --only=production
+# Install dependencies
+RUN npm ci --omit=dev || npm install --production
 
 # Copy application code
 COPY . .
