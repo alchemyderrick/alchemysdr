@@ -178,14 +178,14 @@ export default function FollowupsPage() {
                     className="border border-border/50 rounded-lg p-4 space-y-3 hover:border-amber/30 hover:shadow-lg transition-all bg-amber/5"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="font-semibold text-foreground">{group.contact.name}</div>
+                      <div className="font-semibold text-foreground">{group.contact.company}</div>
                       <Badge className="bg-amber/10 text-amber border-amber/30">
                         messages: {group.totalMessages}
                       </Badge>
                     </div>
 
                     <div className="text-sm text-muted-foreground">
-                      @{group.contact.telegram_handle}
+                      {group.contact.name} • @{group.contact.telegram_handle}
                     </div>
 
                     {/* Preview of most recent follow-up */}
