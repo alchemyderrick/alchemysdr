@@ -150,3 +150,30 @@ One area I'm particularly excited about is our new Cortex architecture, which ha
 Follow-up:
 Hey Javi, just wanted to circle back on my previous message about Alchemy's infrastructure capabilities. I know you and the team at Hyperliquid are laser-focused on delivering the best possible user experience, and I'd be happy to explore how our 5x latency improvements and multi-region redundancy could help enhance that. Let me know if you have 15 minutes this week to dive in!
 ---
+
+--- Message sent 2026-01-09 ---
+Contact: Eshan at Uniswap
+Message:
+Hey Eshan, congrats on the success over at Uniswap!
+
+I noticed you're running infrastructure for one of the largest DEX protocols in all of Web3. As the leading provider of blockchain infrastructure, Alchemy has been working closely with teams like Uniswap to help them scale their infrastructure and deliver lightning-fast performance.
+
+Our new Cortex architecture, for example, has enabled up to 5x lower latency across the Ethereum network. This could be a game-changer for improving the user experience on Uniswap, especially during periods of high volatility. Would you be open to a quick call to discuss how Alchemy's Node API and enhanced features like real-time webhooks could help optimize Uniswap's infrastructure? I'd be happy to walk through some technical specifics.
+---
+
+--- Follow-up sent 2026-01-09 ---
+Contact: Eshan at Uniswap
+Original message:
+Hey Eshan, congrats on the success over at Uniswap!
+
+I noticed you're running infrastructure for one of the largest DEX protocols in all of Web3. As the leading provider of blockchain infrastructure, Alchemy has been working closely with teams like Uniswap to help them scale their infrastructure and deliver lightning-fast performance.
+
+Our new Cortex architecture, for example, has enabled up to 5x lower latency across the Ethereum network. This could be a game-changer for improving the user experience on Uniswap, especially during periods of high volatility. Would you be open to a quick call to discuss how Alchemy's Node API and enhanced features like real-time webhooks could help optimize Uniswap's infrastructure? I'd be happy to walk through some technical specifics.
+
+Follow-up:
+Hey Eshan, just following up on my previous message about how Alchemy could potentially help optimize Uniswap's infrastructure. 
+
+I'd be curious to learn more about the challenges you're facing on the infrastructure side as Uniswap continues to grow. We've seen some impressive results with our 5x latency improvements and real-time webhooks for other leading DeFi teams. 
+
+Let me know if you have any availability this week to chat through how Alchemy could support Uniswap's scaling efforts. No pressure at all, just wanted to keep this on your radar.
+---

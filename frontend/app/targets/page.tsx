@@ -7,10 +7,13 @@ import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api-client'
 import { Target } from '@/lib/types'
 import { toast } from 'sonner'
+import { EditTargetModal } from '@/components/edit-target-modal'
 
 export default function TargetsPage() {
   const [targets, setTargets] = useState<Target[]>([])
   const [loading, setLoading] = useState(true)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [selectedTarget, setSelectedTarget] = useState<Target | null>(null)
 
   useEffect(() => {
     loadTargets()
@@ -109,7 +112,15 @@ export default function TargetsPage() {
               {targets.map((target) => (
                 <div key={target.id} className="border border-border/50 rounded-lg p-4 space-y-3 hover:border-primary/30 hover:shadow-lg transition-all bg-card/30">
                   <div className="font-semibold flex items-center justify-between text-foreground">
-                    <span>{target.team_name}</span>
+                    <button
+                      onClick={() => {
+                        setSelectedTarget(target)
+                        setEditModalOpen(true)
+                      }}
+                      className="hover:text-primary hover:underline transition-colors text-left"
+                    >
+                      {target.team_name}
+                    </button>
                     {target.is_web3 === 1 && (
                       <Badge className="bg-primary/10 text-primary border-primary/30">Web3</Badge>
                     )}
@@ -167,6 +178,15 @@ export default function TargetsPage() {
           )}
         </CardContent>
       </Card>
+
+      {selectedTarget && (
+        <EditTargetModal
+          open={editModalOpen}
+          onOpenChange={setEditModalOpen}
+          target={selectedTarget}
+          onSuccess={loadTargets}
+        />
+      )}
     </div>
   )
 }
