@@ -12,6 +12,7 @@ import { DraftWithContact } from '@/lib/types'
 import { MessageCircle, X, Loader2, Sparkles } from 'lucide-react'
 import { FollowupModal } from './followup-modal'
 import { ImproveMessageModal } from './improve-message-modal'
+import { EditContactModal } from './edit-contact-modal'
 import { toast } from 'sonner'
 
 interface SentMessagesCardProps {
@@ -27,6 +28,7 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
   const [improvingDraft, setImprovingDraft] = useState<DraftWithContact | null>(null)
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null)
   const [editedMessages, setEditedMessages] = useState<Record<string, string>>({})
+  const [editingContact, setEditingContact] = useState<DraftWithContact | null>(null)
 
   useEffect(() => {
     loadSentMessages()
@@ -78,6 +80,14 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
     // Don't close modal - let user close it manually after reviewing the improved message
   }
 
+  const handleEditContact = (draft: DraftWithContact) => {
+    setEditingContact(draft)
+  }
+
+  const handleContactEditSuccess = () => {
+    loadSentMessages()
+  }
+
   return (
     <Card className="relative overflow-hidden flex flex-col border border-success/50 rounded-xl bg-card/50 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:shadow-success/20 hover:border-success/80 group">
       <CardHeader className="pb-4 shrink-0">
@@ -115,7 +125,13 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
               {drafts.map((draft) => (
                 <div key={draft.id} className="border border-border/50 rounded-lg p-4 space-y-3 hover:border-success/30 transition-all bg-card/30">
                   <div className="flex items-center justify-between">
-                    <div className="font-semibold text-foreground">{draft.company}</div>
+                    <div
+                      className="font-semibold text-foreground cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => handleEditContact(draft)}
+                      title="Click to edit contact details"
+                    >
+                      {draft.company}
+                    </div>
                     <Badge className="bg-success/10 text-success border-success/30 text-xs px-2 py-0.5">
                       sent
                     </Badge>
@@ -197,6 +213,17 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
           }}
           draft={improvingDraft}
           onSuccess={(newMessage) => handleImproveSuccess(improvingDraft.id, newMessage)}
+        />
+      )}
+
+      {editingContact && (
+        <EditContactModal
+          open={!!editingContact}
+          onOpenChange={(open) => {
+            if (!open) setEditingContact(null)
+          }}
+          draft={editingContact}
+          onSuccess={handleContactEditSuccess}
         />
       )}
     </Card>

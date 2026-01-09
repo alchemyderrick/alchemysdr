@@ -63,6 +63,48 @@ export function createContactRoutes(db, nanoid, nowISO, generateOutbound) {
     }
   });
 
+  // Update a contact
+  router.patch("/:id", (req, res) => {
+    const { id } = req.params;
+    const { name, company, telegram_handle } = req.body;
+
+    // Validate that at least one field is provided
+    if (!name && !company && !telegram_handle) {
+      return res.status(400).json({ error: "At least one field (name, company, telegram_handle) is required" });
+    }
+
+    // Check if contact exists
+    const contact = db.prepare(`SELECT * FROM contacts WHERE id = ?`).get(id);
+    if (!contact) {
+      return res.status(404).json({ error: "Contact not found" });
+    }
+
+    // Build update query dynamically based on provided fields
+    const updates = [];
+    const values = [];
+
+    if (name !== undefined) {
+      updates.push("name = ?");
+      values.push(name);
+    }
+    if (company !== undefined) {
+      updates.push("company = ?");
+      values.push(company);
+    }
+    if (telegram_handle !== undefined) {
+      updates.push("telegram_handle = ?");
+      values.push(telegram_handle);
+    }
+
+    values.push(id);
+
+    db.prepare(`UPDATE contacts SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+
+    // Return updated contact
+    const updatedContact = db.prepare(`SELECT * FROM contacts WHERE id = ?`).get(id);
+    res.json(updatedContact);
+  });
+
   return router;
 }
 

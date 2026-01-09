@@ -11,6 +11,7 @@ import { History, MessageCircle, X, Sparkles } from 'lucide-react'
 import { ConversationHistoryModal } from '@/components/conversation-history-modal'
 import { FollowupModal } from '@/components/followup-modal'
 import { ImproveMessageModal } from '@/components/improve-message-modal'
+import { EditContactModal } from '@/components/edit-contact-modal'
 import { SentMessagesCard } from '@/components/sent-messages-card'
 import { toast } from 'sonner'
 
@@ -33,6 +34,7 @@ export default function FollowupsPage() {
   const [improvingDraft, setImprovingDraft] = useState<DraftWithContact | null>(null)
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null)
   const [editedMessages, setEditedMessages] = useState<Record<string, string>>({})
+  const [editingContact, setEditingContact] = useState<DraftWithContact | null>(null)
 
   useEffect(() => {
     loadFollowups()
@@ -140,6 +142,14 @@ export default function FollowupsPage() {
     // Don't close modal - let user close it manually after reviewing the improved message
   }
 
+  const handleEditContact = (draft: DraftWithContact) => {
+    setEditingContact(draft)
+  }
+
+  const handleContactEditSuccess = () => {
+    loadFollowups()
+  }
+
   return (
     <div className="p-8 md:p-12 max-w-7xl mx-auto">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -178,7 +188,13 @@ export default function FollowupsPage() {
                     className="border border-border/50 rounded-lg p-4 space-y-3 hover:border-amber/30 hover:shadow-lg transition-all bg-amber/5"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="font-semibold text-foreground">{group.contact.company}</div>
+                      <div
+                        className="font-semibold text-foreground cursor-pointer hover:text-primary transition-colors"
+                        onClick={() => handleEditContact(mostRecent)}
+                        title="Click to edit contact details"
+                      >
+                        {group.contact.company}
+                      </div>
                       <Badge className="bg-amber/10 text-amber border-amber/30">
                         messages: {group.totalMessages}
                       </Badge>
@@ -280,6 +296,17 @@ export default function FollowupsPage() {
             }}
             draft={improvingDraft}
             onSuccess={(newMessage) => handleImproveSuccess(improvingDraft.id, newMessage)}
+          />
+        )}
+
+        {editingContact && (
+          <EditContactModal
+            open={!!editingContact}
+            onOpenChange={(open) => {
+              if (!open) setEditingContact(null)
+            }}
+            draft={editingContact}
+            onSuccess={handleContactEditSuccess}
           />
         )}
       </Card>
