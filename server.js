@@ -1324,7 +1324,7 @@ app.post("/api/relayer/mark-prepared/:id", authenticateRelayer, (req, res) => {
 });
 
 app.post("/api/relayer/mark-failed/:id", authenticateRelayer, (req, res) => {
-  const { id } = req.params;
+  const { id} = req.params;
   const { error: errorMessage } = req.body;
 
   try {
@@ -1344,6 +1344,48 @@ app.post("/api/relayer/mark-failed/:id", authenticateRelayer, (req, res) => {
   } catch (e) {
     console.error("relayer/mark-failed error:", e);
     res.status(500).json({ error: "Failed to mark draft as failed", message: e.message });
+  }
+});
+
+// Relayer: Get pending response capture requests
+app.get("/api/relayer/capture-requests", authenticateRelayer, (req, res) => {
+  try {
+    const requests = req.db.prepare(`
+      SELECT * FROM response_capture_requests
+      WHERE status = 'pending'
+      ORDER BY created_at ASC
+      LIMIT 10
+    `).all();
+
+    res.json({ requests });
+  } catch (e) {
+    console.error("relayer/capture-requests error:", e);
+    res.status(500).json({ error: "Failed to fetch capture requests", message: e.message });
+  }
+});
+
+// Relayer: Complete a response capture request
+app.post("/api/relayer/capture-complete/:id", authenticateRelayer, (req, res) => {
+  const { id } = req.params;
+  const { captured_response, error_message } = req.body;
+
+  try {
+    const status = captured_response ? 'completed' : 'failed';
+    const info = req.db.prepare(`
+      UPDATE response_capture_requests
+      SET status = ?, captured_response = ?, error_message = ?, completed_at = ?
+      WHERE id = ?
+    `).run(status, captured_response || null, error_message || null, nowISO(), id);
+
+    if (info.changes === 0) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+
+    console.log(`✅ Relayer completed capture request ${id}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("relayer/capture-complete error:", e);
+    res.status(500).json({ error: "Failed to complete capture request", message: e.message });
   }
 });
 

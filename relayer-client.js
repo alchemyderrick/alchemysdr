@@ -23,6 +23,14 @@ if (!/^[a-zA-Z0-9_-]+$/.test(EMPLOYEE_ID)) {
   process.exit(1);
 }
 
+// Check for ANTHROPIC_API_KEY
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error("❌ ERROR: ANTHROPIC_API_KEY not set in .env file");
+  console.error("Please add ANTHROPIC_API_KEY=your_key to your .env file");
+  console.error("This is required for response capture feature");
+  process.exit(1);
+}
+
 // State management
 let busy = false;
 const processed = new Set();
@@ -166,6 +174,28 @@ async function fetchPendingDrafts() {
   return data.drafts || [];
 }
 
+async function fetchCaptureRequests() {
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Employee-ID": EMPLOYEE_ID,
+  };
+
+  if (RELAYER_API_KEY) {
+    headers["X-Relayer-API-Key"] = RELAYER_API_KEY;
+  }
+
+  const response = await fetch(`${RENDER_URL}/api/relayer/capture-requests`, {
+    headers,
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.requests || [];
+}
+
 async function markPrepared(draftId) {
   const headers = {
     "Content-Type": "application/json",
@@ -211,10 +241,159 @@ async function markFailed(draftId, errorMessage) {
   return await response.json();
 }
 
+async function completeCaptureRequest(requestId, capturedResponse, errorMessage = null) {
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Employee-ID": EMPLOYEE_ID,
+  };
+
+  if (RELAYER_API_KEY) {
+    headers["X-Relayer-API-Key"] = RELAYER_API_KEY;
+  }
+
+  const response = await fetch(`${RENDER_URL}/api/relayer/capture-complete/${requestId}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      captured_response: capturedResponse,
+      error_message: errorMessage,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  return await response.json();
+}
+
+function captureTelegramScreenshot() {
+  return new Promise((resolve, reject) => {
+    const tempPath = `/tmp/telegram-capture-${Date.now()}.png`;
+
+    exec(`screencapture -x "${tempPath}"`, (err) => {
+      if (err) reject(err);
+      else resolve(tempPath);
+    });
+  });
+}
+
+async function extractResponseFromScreenshot(imagePath) {
+  const imageData = fs.readFileSync(imagePath, { encoding: 'base64' });
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      messages: [{
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: "image/png",
+              data: imageData
+            }
+          },
+          {
+            type: "text",
+            text: `This is a screenshot of a Telegram chat conversation.
+
+Your task: Extract ONLY the messages from the OTHER person (the contact) - these are the messages aligned to the LEFT side of the chat.
+
+CRITICAL - How to identify which messages to extract:
+- LEFT-ALIGNED messages (gray/dark bubbles on the LEFT): These are from the contact - EXTRACT THESE
+- RIGHT-ALIGNED messages (blue bubbles on the RIGHT): These are from me/the user - DO NOT EXTRACT THESE
+
+Rules:
+- ONLY extract LEFT-ALIGNED messages (incoming messages from the contact)
+- NEVER include RIGHT-ALIGNED messages (those are my outgoing messages, ignore them completely)
+- Extract ALL left-aligned messages visible in the screenshot
+- If they sent multiple separate messages, include ALL of them in chronological order (oldest first)
+- Separate each distinct message with TWO blank lines (double newline) between them
+- Preserve the original formatting and line breaks within each individual message
+- If no LEFT-ALIGNED messages are visible (only right-aligned outgoing messages), return exactly: NO_RESPONSE
+
+Return ONLY the extracted message text from LEFT-ALIGNED bubbles, nothing else. Do not add any commentary or labels.`
+          }
+        ]
+      }]
+    })
+  });
+
+  const data = await response.json();
+  const extractedText = data.content[0].text.trim();
+
+  // Clean up screenshot
+  try {
+    fs.unlinkSync(imagePath);
+  } catch (e) {
+    // Ignore cleanup errors
+  }
+
+  return extractedText;
+}
+
+async function processCaptureRequest(request) {
+  log(`\n📸 Processing capture request ${request.id} for @${request.telegram_handle}`);
+
+  try {
+    // Open Telegram to the conversation
+    const link = tgDeepLink(request.telegram_handle);
+    if (!link) {
+      throw new Error(`Invalid Telegram handle: ${request.telegram_handle}`);
+    }
+
+    await open(link);
+    log(`📱 Opened Telegram chat with @${request.telegram_handle}`);
+
+    // Wait for chat to load
+    await new Promise(r => setTimeout(r, 3000));
+
+    // Capture screenshot
+    log("📷 Taking screenshot...");
+    const screenshotPath = await captureTelegramScreenshot();
+
+    // Extract response using Claude Vision
+    log("🔍 Extracting response using Claude Vision...");
+    const extractedResponse = await extractResponseFromScreenshot(screenshotPath);
+
+    // Check if no response was found
+    if (extractedResponse === "NO_RESPONSE" || extractedResponse.toUpperCase().includes("NO_RESPONSE")) {
+      log("❌ No response found from contact");
+      await completeCaptureRequest(request.id, "NO_RESPONSE");
+      return;
+    }
+
+    log(`✅ Extracted response: "${extractedResponse.substring(0, 100)}..."`);
+    await completeCaptureRequest(request.id, extractedResponse);
+  } catch (error) {
+    log(`❌ Failed to capture response: ${error.message}`);
+    await completeCaptureRequest(request.id, null, error.message);
+  }
+}
+
 async function processNextDraft() {
   if (busy) return;
 
   try {
+    // Check for capture requests first (higher priority)
+    const captureRequests = await fetchCaptureRequests();
+    if (captureRequests.length > 0) {
+      busy = true;
+      await processCaptureRequest(captureRequests[0]);
+      busy = false;
+      return;
+    }
+
+    // Then check for drafts to send
     const drafts = await fetchPendingDrafts();
 
     if (drafts.length === 0) {
@@ -315,7 +494,7 @@ async function main() {
     log("\n❌ Initial connection failed. Will keep trying...\n");
   }
 
-  log("\n✅ Relayer started. Polling for approved drafts...");
+  log("\n✅ Relayer started. Polling for approved drafts and capture requests...");
   log("   Press Ctrl+C to stop.\n");
 
   // Start polling loop
