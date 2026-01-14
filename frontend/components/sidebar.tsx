@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Home, MessageCircle, Target, CheckCircle, FileText, ShieldCheck } from 'lucide-react'
-import { XAuthButton } from './x-auth-button'
 
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
@@ -80,11 +79,6 @@ export function Sidebar() {
           </>
         )}
       </nav>
-
-      {/* X Authentication Button */}
-      <div className="mt-auto pt-4 border-t">
-        <XAuthButton />
-      </div>
     </aside>
   )
 }
