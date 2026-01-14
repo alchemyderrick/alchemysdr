@@ -12,6 +12,7 @@ class APIError extends Error {
 export const api = {
   async get<T>(path: string): Promise<T> {
     const res = await fetch(`${API_BASE}${path}`, {
+      credentials: 'include', // Include cookies for session auth
       headers: {
         'Content-Type': 'application/json',
       },
@@ -27,6 +28,7 @@ export const api = {
   async post<T>(path: string, data?: any): Promise<T> {
     const res = await fetch(`${API_BASE}${path}`, {
       method: 'POST',
+      credentials: 'include', // Include cookies for session auth
       headers: {
         'Content-Type': 'application/json',
       },
@@ -43,6 +45,7 @@ export const api = {
   async patch<T>(path: string, data: any): Promise<T> {
     const res = await fetch(`${API_BASE}${path}`, {
       method: 'PATCH',
+      credentials: 'include', // Include cookies for session auth
       headers: {
         'Content-Type': 'application/json',
       },
@@ -59,6 +62,7 @@ export const api = {
   async delete<T>(path: string): Promise<T> {
     const res = await fetch(`${API_BASE}${path}`, {
       method: 'DELETE',
+      credentials: 'include', // Include cookies for session auth
       headers: {
         'Content-Type': 'application/json',
       },
