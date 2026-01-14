@@ -571,6 +571,14 @@ export function createDraftRoutes(
   // Capture response from Telegram (opens Telegram, takes screenshot, extracts response via Claude Vision)
   router.post("/capture-response", async (req, res) => {
     try {
+      // Check if running on macOS (required for Telegram automation)
+      if (process.platform !== "darwin") {
+        return res.status(400).json({
+          error: "platform_not_supported",
+          message: "Response capture only available on macOS"
+        });
+      }
+
       const { telegram_handle } = req.body;
 
       if (!telegram_handle) {

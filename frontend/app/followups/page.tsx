@@ -179,7 +179,10 @@ export default function FollowupsPage() {
       setFollowupModalOpen(true)
       toast.success('Response captured!')
     } catch (error: any) {
-      if (error.message?.includes('no_response') || error.message?.includes('No response found')) {
+      console.error('Capture response error:', error)
+      if (error.message?.includes('platform_not_supported') || error.message?.includes('only available on macOS')) {
+        toast.error('Response capture only works on Mac (use local version)')
+      } else if (error.message?.includes('no_response') || error.message?.includes('No response found')) {
         toast.error('No Response Found')
       } else {
         toast.error('Failed to capture response')
