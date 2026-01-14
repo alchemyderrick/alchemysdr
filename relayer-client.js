@@ -436,22 +436,12 @@ async function processXAuthRequest(request) {
     await open("https://x.com/login");
     log("🌐 Opened X login page in browser");
     log("⏳ Please login to X in the browser...");
-    log("   After logging in, press ENTER in this terminal to continue");
+    log("   Waiting 60 seconds for login...");
 
-    // Wait for user to press enter
-    await new Promise((resolve) => {
-      const readline = require('readline').createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
+    // Wait 60 seconds for user to complete login
+    await new Promise(r => setTimeout(r, 60000));
 
-      readline.question("Press ENTER after you've logged in to X: ", () => {
-        readline.close();
-        resolve();
-      });
-    });
-
-    log("✅ User confirmed login completion");
+    log("✅ Assuming login completed");
     log("🍪 Cookies will be automatically captured by server on next X search");
 
     await completeXAuthRequest(request.id, true);
