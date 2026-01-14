@@ -1396,6 +1396,35 @@ app.post("/api/x-auth/login", requireAuth, async (req, res) => {
   }
 });
 
+// Upload X cookies to employee database
+app.post("/api/x-auth/upload-cookies", requireAuth, async (req, res) => {
+  try {
+    const { cookies } = req.body;
+
+    if (!cookies || !Array.isArray(cookies)) {
+      return res.status(400).json({ ok: false, error: "Invalid cookies format. Expected array of cookie objects." });
+    }
+
+    // Save cookies to employee database
+    const ts = new Date().toISOString();
+    req.db.prepare(`
+      INSERT OR REPLACE INTO employee_config (key, value, updated_at)
+      VALUES ('x_cookies', ?, ?)
+    `).run(JSON.stringify(cookies), ts);
+
+    console.log(`✅ [X-AUTH] Saved ${cookies.length} cookies to database for employee: ${req.employeeId}`);
+
+    res.json({
+      ok: true,
+      message: `Saved ${cookies.length} cookies successfully`,
+      employeeId: req.employeeId
+    });
+  } catch (error) {
+    console.error("[X-AUTH] Error uploading cookies:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // Check X authentication status (protected by requireAuth)
 app.get("/api/x-auth/status", requireAuth, (req, res) => {
   // Check employee database first
