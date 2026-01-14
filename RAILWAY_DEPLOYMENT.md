@@ -1,14 +1,16 @@
-# Railway Deployment Guide
+# Railway Deployment Guide - Multi-User SDR Console
 
-Complete guide for deploying SDR Console to Railway.
+Complete guide for deploying SDR Console with multi-user authentication to Railway.
 
 ## Overview
 
 The SDR Console deploys as a **single Railway service** that:
-- Serves the React/Next.js UI at the root URL
-- Handles all API endpoints
+- Serves the React/Next.js UI with authentication at the root URL
+- Handles all API endpoints with session-based auth
 - Runs Puppeteer for X automation
-- Manages SQLite database
+- Manages per-employee SQLite databases
+- Provides admin dashboard for team oversight
+- Self-service user registration
 
 ## Prerequisites
 
@@ -41,13 +43,19 @@ In your Railway service settings, add these variables:
 ANTHROPIC_API_KEY=sk-ant-your-key-here
 APOLLO_API_KEY=your-apollo-api-key
 RELAYER_API_KEY=generate-random-32-char-string
+SESSION_SECRET=generate-random-64-char-string
 NODE_ENV=production
 RAILWAY_ENVIRONMENT=true
 PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+PORT=3000
 ```
 
-Generate RELAYER_API_KEY:
+Generate secure secrets:
 ```bash
+# SESSION_SECRET (for authentication)
+openssl rand -hex 32
+
+# RELAYER_API_KEY (for Mac client authentication)
 openssl rand -hex 32
 ```
 
@@ -61,18 +69,55 @@ X_COOKIES=[{"name":"auth_token","value":"...","domain":".x.com"}]
 CLAY_WEBHOOK_URL=https://your-clay-webhook-url
 ```
 
-### Step 3: Deploy
+### Step 3: Ensure Persistent Volume is Created
+
+In Railway dashboard → Settings → Volumes:
+1. Verify a volume exists mounted at `/app/databases`
+2. If not, create one:
+   - Click "New Volume"
+   - Mount path: `/app/databases`
+   - Size: 1GB (or more depending on team size)
+
+This ensures employee databases persist across deployments.
+
+### Step 4: Deploy
 
 Railway will automatically deploy. Monitor the build logs:
-- ✅ `npm ci` - Installing dependencies
-- ✅ `npm run build` - Building React frontend
-- ✅ `npm start` - Starting server
+- ✅ `npm ci` - Installing backend dependencies
+- ✅ `cd frontend && npm ci` - Installing frontend dependencies
+- ✅ `npm run build` - Building Next.js frontend
+- ✅ `npm start` - Starting Express server
 
-### Step 4: Verify
+### Step 5: Create First Admin User
 
-Visit your Railway URL (e.g., `https://sdr-console-production.up.railway.app`):
-- Should see the React UI (shadcn design)
-- Test API: `https://your-url.railway.app/api/health/claude`
+Once deployment is complete, you need to create the first admin user using Railway shell:
+
+```bash
+# Option A: Railway CLI
+railway shell
+node scripts/create-user.js
+
+# Option B: Railway Dashboard
+# Go to service → Shell tab
+# Run: node scripts/create-user.js
+
+# Follow prompts:
+# Username: derrick
+# Employee ID: derrick
+# Is admin? y
+# Password: <secure_password>
+# Confirm password: <secure_password>
+```
+
+### Step 6: Verify Deployment
+
+Visit your Railway URL (e.g., `https://web-production-554d8.up.railway.app`):
+- ✅ Should see the **login page** (not home page)
+- ✅ Login with admin credentials
+- ✅ See Admin tab in sidebar
+- ✅ Test registration: Click "Create account" and register a test user
+- ✅ Verify user isolation: New user should have empty database
+- ✅ Test admin dashboard: View all users and their stats
 
 ## Architecture on Railway
 
@@ -80,10 +125,27 @@ Visit your Railway URL (e.g., `https://sdr-console-production.up.railway.app`):
 Railway Service (sdr-console)
 ├── Express Backend (port $PORT)
 │   ├── API Routes (/api/*)
-│   ├── SQLite Database
+│   │   ├── /api/auth/* - Login, registration, session management
+│   │   ├── /api/admin/* - Admin dashboard, impersonation
+│   │   ├── /api/targets/* - Per-user target management
+│   │   ├── /api/contacts/* - Per-user contact management
+│   │   └── /api/drafts/* - Per-user draft management
+│   ├── Authentication
+│   │   ├── auth.db - User credentials (bcrypt hashed)
+│   │   └── sessions.db - Active sessions (express-session)
+│   ├── Per-User Databases (persistent volume)
+│   │   ├── databases/derrick/data.db
+│   │   ├── databases/user1/data.db
+│   │   └── databases/user2/data.db
 │   └── Puppeteer (Chromium)
-└── Static React App (frontend/out)
-    └── Served at root (/)
+└── Static Next.js App (frontend/out)
+    ├── /login - Login page
+    ├── /register - Self-service registration
+    ├── /admin - Admin dashboard (admin only)
+    ├── / - Home page (authenticated)
+    ├── /targets - Research teams (authenticated)
+    ├── /approved - Target teams (authenticated)
+    └── /followups - Follow-ups (authenticated)
 ```
 
 ## Automation Setup

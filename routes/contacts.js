@@ -2,8 +2,9 @@ import { Router } from "express";
 
 /**
  * Contact routes
+ * NOTE: db is now accessed via req.db (set by authentication middleware)
  */
-export function createContactRoutes(db, nanoid, nowISO, generateOutbound) {
+export function createContactRoutes(nanoid, nowISO, generateOutbound) {
   const router = Router();
 
   // Create a new contact
@@ -12,7 +13,7 @@ export function createContactRoutes(db, nanoid, nowISO, generateOutbound) {
     if (!name) return res.status(400).json({ error: "name is required" });
     if (!company) return res.status(400).json({ error: "company is required" });
     const id = nanoid();
-    db.prepare(`INSERT INTO contacts (id, name, company, title, telegram_handle, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+    req.db.prepare(`INSERT INTO contacts (id, name, company, title, telegram_handle, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
       id,
       name,
       company || null,
@@ -32,7 +33,7 @@ export function createContactRoutes(db, nanoid, nowISO, generateOutbound) {
       if (!company) return res.status(400).json({ error: "company is required" });
 
       const contactId = nanoid();
-      db.prepare(`INSERT INTO contacts (id, name, company, title, telegram_handle, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+      req.db.prepare(`INSERT INTO contacts (id, name, company, title, telegram_handle, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
         contactId,
         name,
         company || null,
@@ -43,7 +44,7 @@ export function createContactRoutes(db, nanoid, nowISO, generateOutbound) {
       );
 
       // Get the contact we just created
-      const contact = db.prepare(`SELECT * FROM contacts WHERE id = ?`).get(contactId);
+      const contact = req.db.prepare(`SELECT * FROM contacts WHERE id = ?`).get(contactId);
 
       // Generate the message text using AI
       const messageText = await generateOutbound(contact, false);
@@ -51,7 +52,7 @@ export function createContactRoutes(db, nanoid, nowISO, generateOutbound) {
       // Create a draft with the generated message
       const draftId = nanoid();
       const now = nowISO();
-      db.prepare(`
+      req.db.prepare(`
         INSERT INTO drafts (id, contact_id, channel, message_text, status, prepared_at, created_at, updated_at)
         VALUES (?, ?, 'telegram', ?, 'queued', ?, ?, ?)
       `).run(draftId, contactId, messageText, now, now, now);
@@ -74,7 +75,7 @@ export function createContactRoutes(db, nanoid, nowISO, generateOutbound) {
     }
 
     // Check if contact exists
-    const contact = db.prepare(`SELECT * FROM contacts WHERE id = ?`).get(id);
+    const contact = req.db.prepare(`SELECT * FROM contacts WHERE id = ?`).get(id);
     if (!contact) {
       return res.status(404).json({ error: "Contact not found" });
     }
@@ -98,10 +99,10 @@ export function createContactRoutes(db, nanoid, nowISO, generateOutbound) {
 
     values.push(id);
 
-    db.prepare(`UPDATE contacts SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+    req.db.prepare(`UPDATE contacts SET ${updates.join(", ")} WHERE id = ?`).run(...values);
 
     // Return updated contact
-    const updatedContact = db.prepare(`SELECT * FROM contacts WHERE id = ?`).get(id);
+    const updatedContact = req.db.prepare(`SELECT * FROM contacts WHERE id = ?`).get(id);
     res.json(updatedContact);
   });
 

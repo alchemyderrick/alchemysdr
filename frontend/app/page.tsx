@@ -19,10 +19,11 @@ export default function HomePage() {
 
   const loadStats = async () => {
     try {
-      // Fetch all drafts and follow-ups
-      const [allDrafts, followUps] = await Promise.all([
+      // Fetch all drafts, follow-ups, and sent messages
+      const [allDrafts, followUps, sentMessages] = await Promise.all([
         api.get<any[]>('/api/drafts'),
-        api.get<any[]>('/api/drafts/followups')
+        api.get<any[]>('/api/drafts/followups'),
+        api.get<any[]>('/api/drafts/sent')
       ])
 
       // Calculate midnight EST (same logic as localhost:3000)
@@ -42,19 +43,50 @@ export default function HomePage() {
         return msgDate >= midnightLocal
       }).length
 
-      // Count sent follow-ups since midnight EST (using prepared_at)
+      // Count ONLY follow-up messages (status='followup') sent today
+      // Don't count status='sent' from followUps to avoid double-counting
       const sentFollowUpsToday = followUps.filter((f: any) => {
+        if (f.status !== 'followup') return false // Only count followup status
         if (!f.prepared_at) return false
         const msgDate = new Date(f.prepared_at)
         return msgDate >= midnightLocal
       }).length
 
-      // Total messages sent today = sent drafts + sent follow-ups
+      // Total messages sent today = sent drafts + sent follow-ups (no double-counting)
       const totalMessagesToday = sentDraftsToday + sentFollowUpsToday
 
-      // Count unique contacts needing follow-up (not total follow-up messages)
-      const uniqueContacts = new Set(followUps.map((f: any) => f.contact_id))
-      const followUpCount = uniqueContacts.size
+      // Follow-up count = count contacts with red dots on Follow-ups tab
+      // This includes contacts from both Sent Messages card AND Follow-ups card
+      // A contact gets a red dot if their most recent message is 48+ hours old
+      const fortyEightHours = 48 * 60 * 60 * 1000
+      const currentTime = Date.now()
+      let followUpCount = 0
+
+      // Count from Follow-ups card (group by contact, check most recent)
+      const followUpsByContact = new Map<string, any[]>()
+      for (const msg of followUps) {
+        if (!followUpsByContact.has(msg.contact_id)) {
+          followUpsByContact.set(msg.contact_id, [])
+        }
+        followUpsByContact.get(msg.contact_id)!.push(msg)
+      }
+      followUpsByContact.forEach((msgs) => {
+        // Sort by updated_at descending to get most recent first
+        msgs.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        const mostRecent = msgs[0]
+        const lastTime = new Date(mostRecent.updated_at).getTime()
+        if ((currentTime - lastTime) >= fortyEightHours) {
+          followUpCount++
+        }
+      })
+
+      // Count from Sent Messages card (each is a unique contact)
+      for (const msg of sentMessages) {
+        const lastTime = new Date(msg.updated_at).getTime()
+        if ((currentTime - lastTime) >= fortyEightHours) {
+          followUpCount++
+        }
+      }
 
       setMessagesSent(totalMessagesToday)
       setFollowUpCount(followUpCount)

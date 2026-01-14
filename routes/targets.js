@@ -4,8 +4,9 @@ import { searchCompanyContacts } from "../lib/contact-search.js";
 /**
  * Target routes
  * Handles target management and discovery workflows
+ * NOTE: db is now accessed via req.db (set by authentication middleware)
  */
-export function createTargetRoutes(db, workflowEngine, anthropic, nanoid, nowISO, qualifiesTarget, apolloClient) {
+export function createTargetRoutes(workflowEngine, anthropic, nanoid, nowISO, qualifiesTarget, apolloClient) {
   const router = Router();
 
   // Target-triggered X discovery: discover users for a specific target
@@ -15,7 +16,7 @@ export function createTargetRoutes(db, workflowEngine, anthropic, nanoid, nowISO
       const { max_users = 5 } = req.body;
 
       // Get target
-      const target = db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+      const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
 
       if (!target) {
         return res.status(404).json({ error: "Target not found" });
@@ -49,7 +50,7 @@ export function createTargetRoutes(db, workflowEngine, anthropic, nanoid, nowISO
       const { id } = req.params;
 
       // Get target
-      const target = db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+      const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
 
       if (!target) {
         return res.status(404).json({ error: "Target not found" });
@@ -80,20 +81,20 @@ export function createTargetRoutes(db, workflowEngine, anthropic, nanoid, nowISO
       const { id, contact_id } = req.params;
 
       // Get target
-      const target = db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+      const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
 
       if (!target) {
         return res.status(404).json({ error: "Target not found" });
       }
 
       // Delete associated drafts first (to avoid foreign key constraint)
-      const draftsDeleted = db.prepare("DELETE FROM drafts WHERE contact_id = ?").run(contact_id);
+      const draftsDeleted = req.db.prepare("DELETE FROM drafts WHERE contact_id = ?").run(contact_id);
 
       // Delete from discovered_contacts table
-      const result1 = db.prepare("DELETE FROM discovered_contacts WHERE id = ? AND target_id = ?").run(contact_id, id);
+      const result1 = req.db.prepare("DELETE FROM discovered_contacts WHERE id = ? AND target_id = ?").run(contact_id, id);
 
       // Delete from contacts table
-      const result2 = db.prepare("DELETE FROM contacts WHERE id = ? AND company = ?").run(contact_id, target.team_name);
+      const result2 = req.db.prepare("DELETE FROM contacts WHERE id = ? AND company = ?").run(contact_id, target.team_name);
 
       console.log(`[API] Deleted contact ${contact_id} for ${target.team_name} (drafts: ${draftsDeleted.changes}, discovered: ${result1.changes}, contacts: ${result2.changes})`);
 
@@ -113,21 +114,21 @@ export function createTargetRoutes(db, workflowEngine, anthropic, nanoid, nowISO
       const { id } = req.params;
 
       // Get target
-      const target = db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+      const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
 
       if (!target) {
         return res.status(404).json({ error: "Target not found" });
       }
 
       // Get stored contacts from discovered_contacts table
-      const webContacts = db.prepare(`
+      const webContacts = req.db.prepare(`
         SELECT * FROM discovered_contacts
         WHERE target_id = ?
         ORDER BY discovered_at DESC
       `).all(id);
 
       // Get X discovery contacts from contacts table
-      const xContacts = db.prepare(`
+      const xContacts = req.db.prepare(`
         SELECT id, name, title, telegram_handle, x_username, x_bio, created_at
         FROM contacts
         WHERE company = ?

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api-client'
 import { DraftWithContact } from '@/lib/types'
-import { History, MessageCircle, X, Sparkles } from 'lucide-react'
+import { History, MessageCircle, X, Loader2, MessageSquareReply } from 'lucide-react'
 import { ConversationHistoryModal } from '@/components/conversation-history-modal'
 import { FollowupModal } from '@/components/followup-modal'
 import { ImproveMessageModal } from '@/components/improve-message-modal'
@@ -35,6 +35,9 @@ export default function FollowupsPage() {
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null)
   const [editedMessages, setEditedMessages] = useState<Record<string, string>>({})
   const [editingContact, setEditingContact] = useState<DraftWithContact | null>(null)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [capturedResponse, setCapturedResponse] = useState<string | null>(null)
+  const [capturingResponse, setCapturingResponse] = useState<string | null>(null)
 
   useEffect(() => {
     loadFollowups()
@@ -84,7 +87,24 @@ export default function FollowupsPage() {
         group.totalMessages = group.sentFollowUpCount + 1
       }
 
-      setContactGroups(Array.from(groups.values()))
+      // Sort contacts: those needing follow-up (48+ hours) at top, others at bottom
+      const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+        const aLastTime = new Date(a.followUps[0].updated_at).getTime()
+        const bLastTime = new Date(b.followUps[0].updated_at).getTime()
+        const fortyEightHours = 48 * 60 * 60 * 1000
+        const now = Date.now()
+        const aNeedsFollowUp = (now - aLastTime) >= fortyEightHours
+        const bNeedsFollowUp = (now - bLastTime) >= fortyEightHours
+
+        // Contacts needing follow-up come first
+        if (aNeedsFollowUp && !bNeedsFollowUp) return -1
+        if (!aNeedsFollowUp && bNeedsFollowUp) return 1
+
+        // Within same category, sort by oldest first (most urgent at top)
+        return aLastTime - bLastTime
+      })
+
+      setContactGroups(sortedGroups)
     } catch (error) {
       console.error('Failed to load follow-ups:', error)
     } finally {
@@ -146,6 +166,29 @@ export default function FollowupsPage() {
     setEditingContact(draft)
   }
 
+  const handleRespondedClick = async (group: ContactGroup) => {
+    const mostRecent = group.followUps[0]
+    setCapturingResponse(mostRecent.id)
+    try {
+      toast.info('Opening Telegram and capturing response...')
+      const result = await api.post<{ response: string }>('/api/drafts/capture-response', {
+        telegram_handle: mostRecent.telegram_handle
+      })
+      setCapturedResponse(result.response)
+      setSelectedDraft(mostRecent)
+      setFollowupModalOpen(true)
+      toast.success('Response captured!')
+    } catch (error: any) {
+      if (error.message?.includes('no_response') || error.message?.includes('No response found')) {
+        toast.error('No Response Found')
+      } else {
+        toast.error('Failed to capture response')
+      }
+    } finally {
+      setCapturingResponse(null)
+    }
+  }
+
   const handleContactEditSuccess = () => {
     loadFollowups()
   }
@@ -182,18 +225,28 @@ export default function FollowupsPage() {
             <div className="grid gap-4">
               {contactGroups.map((group) => {
                 const mostRecent = group.followUps[0]
+                const currentMessage = editedMessages[mostRecent.id] ?? mostRecent.message_text
+                // Check if last message was sent more than 48 hours ago
+                const lastMessageTime = new Date(mostRecent.updated_at).getTime()
+                const hoursSinceLastMessage = (Date.now() - lastMessageTime) / (1000 * 60 * 60)
+                const needsFollowUp = hoursSinceLastMessage >= 48
                 return (
                   <div
                     key={group.contact.contact_id}
                     className="border border-border/50 rounded-lg p-4 space-y-3 hover:border-amber/30 hover:shadow-lg transition-all bg-amber/5"
                   >
                     <div className="flex items-center justify-between">
-                      <div
-                        className="font-semibold text-foreground cursor-pointer hover:text-primary transition-colors"
-                        onClick={() => handleEditContact(mostRecent)}
-                        title="Click to edit contact details"
-                      >
-                        {group.contact.company}
+                      <div className="flex items-center gap-2">
+                        {needsFollowUp && (
+                          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="No follow-up in 48+ hours" />
+                        )}
+                        <div
+                          className="font-semibold text-foreground cursor-pointer hover:text-primary transition-colors"
+                          onClick={() => handleEditContact(mostRecent)}
+                          title="Click to edit contact details"
+                        >
+                          {group.contact.company}
+                        </div>
                       </div>
                       <Badge className="bg-amber/10 text-amber border-amber/30">
                         messages: {group.totalMessages}
@@ -201,12 +254,12 @@ export default function FollowupsPage() {
                     </div>
 
                     <div className="text-sm text-muted-foreground">
-                      {group.contact.name} • @{group.contact.telegram_handle}
+                      {group.contact.name} • @{group.contact.telegram_handle} • Sent: {new Date(mostRecent.updated_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })}
                     </div>
 
                     {/* Preview of most recent follow-up */}
                     <Textarea
-                      value={editedMessages[mostRecent.id] ?? mostRecent.message_text}
+                      value={currentMessage}
                       onChange={(e) => {
                         setEditedMessages(prev => ({
                           ...prev,
@@ -223,28 +276,20 @@ export default function FollowupsPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleImproveMessage(mostRecent)}
-                        className="border-border/50 hover:bg-primary/10 hover:border-primary hover:text-primary"
-                        title="Improve message with feedback"
-                      >
-                        <Sparkles className="h-3 w-3" />
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="outline"
                         className="border-border/50 hover:bg-cyan-500/10 hover:border-cyan-500"
                         onClick={() => handleViewHistory(group.contact)}
+                        disabled={actionLoading === mostRecent.id}
+                        title="View conversation history"
                       >
-                        <History className="mr-1 h-3 w-3" />
-                        View History ({group.totalMessages})
+                        <History className="h-3 w-3" />
                       </Button>
 
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-border/50 hover:bg-success/10 hover:border-success"
+                        className="flex-1 border-border/50 hover:bg-amber/10 hover:border-amber hover:text-amber"
                         onClick={() => handleSendFollowup(group)}
+                        disabled={actionLoading === mostRecent.id || capturingResponse === mostRecent.id}
                       >
                         <MessageCircle className="mr-1 h-3 w-3" />
                         Send Follow-up
@@ -253,11 +298,28 @@ export default function FollowupsPage() {
                       <Button
                         size="sm"
                         variant="outline"
+                        className="border-border/50 hover:bg-primary/10 hover:border-primary hover:text-primary"
+                        onClick={() => handleRespondedClick(group)}
+                        disabled={actionLoading === mostRecent.id || capturingResponse === mostRecent.id}
+                        title="Capture their response from Telegram"
+                      >
+                        {capturingResponse === mostRecent.id ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : (
+                          <MessageSquareReply className="mr-1 h-3 w-3" />
+                        )}
+                        Responded
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
                         className="border-border/50 hover:bg-destructive/10 hover:border-destructive hover:text-destructive"
                         onClick={() => handleDismissAll(group)}
+                        disabled={actionLoading === mostRecent.id || capturingResponse === mostRecent.id}
+                        title="Dismiss all follow-ups"
                       >
-                        <X className="mr-1 h-3 w-3" />
-                        Dismiss All
+                        <X className="h-3 w-3" />
                       </Button>
                     </div>
                   </div>
@@ -282,9 +344,13 @@ export default function FollowupsPage() {
         {selectedDraft && (
           <FollowupModal
             open={followupModalOpen}
-            onOpenChange={setFollowupModalOpen}
+            onOpenChange={(open) => {
+              setFollowupModalOpen(open)
+              if (!open) setCapturedResponse(null)
+            }}
             draft={selectedDraft}
             onSuccess={handleFollowupSuccess}
+            capturedResponse={capturedResponse}
           />
         )}
 

@@ -13,6 +13,13 @@ x-cookies.json
 data.db
 data.db-shm
 data.db-wal
+auth.db
+auth.db-shm
+auth.db-wal
+sessions.db
+sessions.db-shm
+sessions.db-wal
+databases/
 
 # macOS
 .DS_Store

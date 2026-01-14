@@ -61,12 +61,16 @@ export function ConversationHistoryModal({
         ) : (
           <div className="space-y-4 mt-4">
             {history.map((msg, index) => {
-              const isOriginal = msg.status === 'sent'
+              // Messages are ordered DESC (most recent first)
+              // Count follow-ups from the end (oldest) to get proper numbering
+              const totalMessages = history.length
+              const followUpNumber = totalMessages - index
+              const isFirstMessage = index === totalMessages - 1
               return (
                 <div
                   key={msg.id}
                   className={`p-4 rounded-lg border ${
-                    isOriginal
+                    isFirstMessage
                       ? 'bg-primary/5 border-primary/30'
                       : 'bg-amber/5 border-amber/30'
                   }`}
@@ -74,12 +78,12 @@ export function ConversationHistoryModal({
                   <div className="flex items-center gap-2 mb-2">
                     <Badge
                       className={
-                        isOriginal
+                        isFirstMessage
                           ? 'bg-primary/10 text-primary border-primary/30'
                           : 'bg-amber/10 text-amber border-amber/30'
                       }
                     >
-                      {isOriginal ? 'Original Message' : `Follow-up #${index}`}
+                      {isFirstMessage ? 'Original Message' : `Follow-up #${followUpNumber - 1}`}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
                       {new Date(msg.updated_at).toLocaleString()}

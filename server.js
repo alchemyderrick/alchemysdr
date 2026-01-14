@@ -2,11 +2,15 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import session from "express-session";
+import SqliteStore from "better-sqlite3-session-store";
+import Database from "better-sqlite3";
 import { nanoid } from "nanoid";
 import fs from "node:fs";
 import path from "node:path";
 import { WorkflowEngine } from "./lib/workflow-engine.js";
-import { initializeDatabase } from "./lib/database.js";
+import { initializeDatabase, getDatabaseForEmployee, closeAllDatabases } from "./lib/database.js";
+import { createUser, verifyUser, getUserByEmployeeId, getAllUsers } from "./lib/auth.js";
 import {
   nowISO,
   tgLinks,
@@ -19,6 +23,8 @@ import {
   cancelTelegramAutoSend,
   splitIntoParagraphs,
   sendMultiParagraphMessage,
+  captureTelegramWindow,
+  extractResponseFromScreenshot,
   generateOutbound,
   generateOutboundWithFeedback,
   generateFollowUp,
@@ -33,6 +39,12 @@ import { createApolloClient } from "./lib/apollo-search.js";
 
 const app = express();
 
+// Helper to strip citation tags from text (e.g., <cite index="46-3,46-4">)
+function stripCiteTags(text) {
+  if (!text) return text;
+  return String(text).replace(/<cite[^>]*>/gi, '').replace(/<\/cite>/gi, '').trim();
+}
+
 // CORS configuration for React frontend
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3001',
@@ -43,22 +55,41 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
+// Session setup for authentication
+const SessionStore = SqliteStore(session);
+app.use(session({
+  store: new SessionStore({
+    client: new Database('sessions.db'),
+    expired: {
+      clear: true,
+      intervalMs: 900000 // 15 minutes
+    }
+  }),
+  secret: process.env.SESSION_SECRET || 'change-this-in-production-please',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  }
+}));
+
 // Serve static files from current directory
 app.use(express.static(process.cwd()));
 
-// In production/Railway, serve Next.js static export
-if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
-  const frontendOutPath = path.join(process.cwd(), 'frontend', 'out');
+// Serve Next.js static export (both dev and production)
+const frontendOutPath = path.join(process.cwd(), 'frontend', 'out');
 
-  // Check if Next.js static export exists
-  if (fs.existsSync(frontendOutPath)) {
-    console.log("📦 Serving Next.js static export from frontend/out");
+// Check if Next.js static export exists
+if (fs.existsSync(frontendOutPath)) {
+  console.log("📦 Serving Next.js static export from frontend/out");
 
-    // Serve Next.js static files with priority
-    app.use(express.static(frontendOutPath, { index: false }));
-  } else {
-    console.log("⚠️ Next.js static export not found at frontend/out");
-  }
+  // Serve Next.js static files with priority
+  app.use(express.static(frontendOutPath, { index: false }));
+} else {
+  console.log("⚠️ Next.js static export not found at frontend/out");
+  console.log("💡 Run 'npm run build' to generate frontend");
 }
 
 // Initialize database
@@ -74,31 +105,256 @@ if (apolloApiKey) {
   console.log("⚠️ Apollo API key not configured (will use Claude fallback only)");
 }
 
-// Serve React UI
-app.get("/", (req, res) => {
-  // In production/Railway, serve Next.js static export
-  if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
-    const nextIndexPath = path.join(process.cwd(), 'frontend', 'out', 'index.html');
+// ============================================
+// Authentication Middleware & Endpoints
+// ============================================
 
-    if (fs.existsSync(nextIndexPath)) {
-      return res.sendFile(nextIndexPath);
+/**
+ * Authentication middleware - protects routes that require login
+ */
+function requireAuth(req, res, next) {
+  if (!req.session.employeeId) {
+    // For API calls, return 401
+    if (req.path.startsWith('/api/')) {
+      return res.status(401).json({ error: 'Not authenticated' });
     }
-
-    // If static export not found but FRONTEND_URL is set, redirect
-    if (process.env.FRONTEND_URL) {
-      return res.redirect(process.env.FRONTEND_URL);
-    }
-
-    // No React UI available
-    return res.status(503).send('React UI not built. Please run: npm run build');
+    // For page requests, redirect to login
+    return res.redirect('/login');
   }
 
-  // In development, redirect to Next.js dev server
-  res.redirect('http://localhost:3001');
+  // If admin is impersonating, use impersonated employee's database
+  const activeEmployeeId = req.session.impersonating || req.session.employeeId;
+
+  req.employeeId = activeEmployeeId;
+  req.username = req.session.username;
+  req.isAdmin = req.session.isAdmin || false;
+  req.impersonating = req.session.impersonating || null;
+  req.db = getDatabaseForEmployee(activeEmployeeId);
+
+  next();
+}
+
+/**
+ * Relayer authentication middleware - for Mac client API access
+ */
+function authenticateRelayer(req, res, next) {
+  const apiKey = req.headers['x-relayer-api-key'];
+  const employeeId = req.headers['x-employee-id'];
+
+  if (!employeeId) {
+    return res.status(400).json({ error: 'x-employee-id header required' });
+  }
+
+  if (apiKey !== process.env.RELAYER_API_KEY) {
+    return res.status(401).json({ error: 'Invalid API key' });
+  }
+
+  req.employeeId = employeeId;
+  req.db = getDatabaseForEmployee(employeeId);
+
+  next();
+}
+
+// Registration endpoint
+app.post('/api/auth/register', async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password required' });
+  }
+
+  // Validate username (alphanumeric, underscore, dash only)
+  if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+    return res.status(400).json({ error: 'Username can only contain letters, numbers, underscores, and dashes' });
+  }
+
+  // Validate password length
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+
+  // Use username as employee_id for self-registration
+  const result = await createUser(username, password, username, false);
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  // Automatically log them in after registration
+  req.session.employeeId = username;
+  req.session.username = username;
+  req.session.isAdmin = false;
+  req.session.impersonating = null;
+
+  res.json({
+    success: true,
+    username: username,
+    employeeId: username,
+    isAdmin: false
+  });
 });
 
-app.get("/api/targets/approved", (req, res) => {
-  const rows = db.prepare(`
+// Login endpoint
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password required' });
+  }
+
+  const result = await verifyUser(username, password);
+
+  if (!result.success) {
+    return res.status(401).json({ error: result.error });
+  }
+
+  // Set session
+  req.session.employeeId = result.employeeId;
+  req.session.username = result.username;
+  req.session.isAdmin = result.isAdmin;
+  req.session.impersonating = null;
+
+  res.json({
+    success: true,
+    username: result.username,
+    employeeId: result.employeeId,
+    isAdmin: result.isAdmin
+  });
+});
+
+// Logout endpoint
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Logout failed' });
+    }
+    res.json({ success: true });
+  });
+});
+
+// Check auth status endpoint
+app.get('/api/auth/status', (req, res) => {
+  if (req.session.employeeId) {
+    res.json({
+      authenticated: true,
+      username: req.session.username,
+      employeeId: req.session.employeeId,
+      isAdmin: req.session.isAdmin || false,
+      impersonating: req.session.impersonating || null
+    });
+  } else {
+    res.json({ authenticated: false });
+  }
+});
+
+// Admin: Impersonate employee
+app.post('/api/admin/impersonate', requireAuth, (req, res) => {
+  if (!req.session.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { employeeId } = req.body;
+
+  if (!employeeId) {
+    return res.status(400).json({ error: 'employeeId required' });
+  }
+
+  // Validate employee exists
+  const user = getUserByEmployeeId(employeeId);
+  if (!user) {
+    return res.status(404).json({ error: 'Employee not found' });
+  }
+
+  // Set impersonation
+  req.session.impersonating = employeeId;
+
+  res.json({
+    success: true,
+    impersonating: employeeId,
+    message: `Now viewing as ${user.username}`
+  });
+});
+
+// Admin: Stop impersonating
+app.post('/api/admin/stop-impersonate', requireAuth, (req, res) => {
+  if (!req.session.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  req.session.impersonating = null;
+
+  res.json({
+    success: true,
+    message: 'Stopped impersonating'
+  });
+});
+
+// Admin: Get all employees
+app.get('/api/admin/employees', requireAuth, (req, res) => {
+  if (!req.session.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const users = getAllUsers();
+  res.json({ users });
+});
+
+// Admin: Get employee activity summary
+app.get('/api/admin/employees/:employeeId/stats', requireAuth, (req, res) => {
+  if (!req.session.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { employeeId } = req.params;
+  const empDb = getDatabaseForEmployee(employeeId);
+
+  const stats = {
+    targets: empDb.prepare("SELECT COUNT(*) as count FROM targets WHERE status = 'approved'").get(),
+    contacts: empDb.prepare('SELECT COUNT(*) as count FROM contacts').get(),
+    drafts: empDb.prepare('SELECT COUNT(*) as count FROM drafts').get(),
+    sent: empDb.prepare("SELECT COUNT(*) as count FROM drafts WHERE status = 'sent'").get(),
+    pending: empDb.prepare("SELECT COUNT(*) as count FROM drafts WHERE status IN ('queued', 'approved')").get(),
+    recentActivity: empDb.prepare(`
+      SELECT 'draft' as type, status, updated_at
+      FROM drafts
+      ORDER BY updated_at DESC
+      LIMIT 10
+    `).all()
+  };
+
+  res.json({ employeeId, stats });
+});
+
+// Graceful shutdown - close all database connections
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, closing databases...');
+  closeAllDatabases();
+  process.exit(0);
+});
+
+// ============================================
+// End Authentication Section
+// ============================================
+
+// Serve React UI - Note: catch-all route at end of file handles other pages
+app.get("/", (req, res) => {
+  const nextIndexPath = path.join(process.cwd(), 'frontend', 'out', 'index.html');
+
+  if (fs.existsSync(nextIndexPath)) {
+    return res.sendFile(nextIndexPath);
+  }
+
+  // If static export not found but FRONTEND_URL is set, redirect
+  if (process.env.FRONTEND_URL) {
+    return res.redirect(process.env.FRONTEND_URL);
+  }
+
+  // No React UI available
+  return res.status(503).send('React UI not built. Please run: npm run build');
+});
+
+app.get("/api/targets/approved", requireAuth, (req, res) => {
+  const rows = req.db.prepare(`
     SELECT
       t.*,
       COUNT(DISTINCT CASE
@@ -122,15 +378,15 @@ app.get("/api/targets/approved", (req, res) => {
   res.json(rows);
 });
 
-app.post("/api/targets/:id/approve", (req, res) => {
+app.post("/api/targets/:id/approve", requireAuth, (req, res) => {
   const { id } = req.params;
-  const info = db.prepare(`UPDATE targets SET status = 'approved', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+  const info = req.db.prepare(`UPDATE targets SET status = 'approved', updated_at = ? WHERE id = ?`).run(nowISO(), id);
   if (info.changes === 0) return res.status(404).json({ error: "target not found" });
   res.json({ ok: true });
 });
 
-app.get("/api/targets", (req, res) => {
-  const rows = db.prepare(`
+app.get("/api/targets", requireAuth, (req, res) => {
+  const rows = req.db.prepare(`
     SELECT * FROM targets
     WHERE status = 'pending'
       AND is_web3 = 1
@@ -154,10 +410,10 @@ app.get("/api/targets", (req, res) => {
   res.json(rows);
 });
 
-app.post("/api/targets/:id/find-contacts", async (req, res) => {
+app.post("/api/targets/:id/find-contacts", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const target = db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+    const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
     if (!target) return res.status(404).json({ error: "target not found" });
 
     console.log(`🔍 Finding contacts for ${target.team_name}...`);
@@ -390,10 +646,10 @@ NOT_FOUND - if you see an error or "user not found"`;
   }
 });
 
-app.post("/api/targets/:id/find-website", async (req, res) => {
+app.post("/api/targets/:id/find-website", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const target = db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+    const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
     if (!target) return res.status(404).json({ error: "target not found" });
 
     console.log(`🔍 Finding website for ${target.team_name}...`);
@@ -428,7 +684,7 @@ Example responses:
     const website = responseText.trim().toLowerCase();
     
     if (website && website !== "none" && (website.startsWith("http://") || website.startsWith("https://"))) {
-      db.prepare("UPDATE targets SET website = ?, updated_at = ? WHERE id = ?").run(website, nowISO(), id);
+      req.db.prepare("UPDATE targets SET website = ?, updated_at = ? WHERE id = ?").run(website, nowISO(), id);
       console.log(`✅ Found website for ${target.team_name}: ${website}`);
       res.json({ ok: true, website });
     } else {
@@ -442,10 +698,10 @@ Example responses:
   }
 });
 
-app.post("/api/targets/:id/find-x-handle", async (req, res) => {
+app.post("/api/targets/:id/find-x-handle", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const target = db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+    const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
     if (!target) return res.status(404).json({ error: "target not found" });
 
     console.log(`🔍 Finding X handle for ${target.team_name}...`);
@@ -480,7 +736,7 @@ Example responses:
     const handle = responseText.trim().toLowerCase().replace("@", "");
     
     if (handle && handle !== "none" && handle.length > 0 && handle.length < 50) {
-      db.prepare("UPDATE targets SET x_handle = ?, updated_at = ? WHERE id = ?").run(handle, nowISO(), id);
+      req.db.prepare("UPDATE targets SET x_handle = ?, updated_at = ? WHERE id = ?").run(handle, nowISO(), id);
       console.log(`✅ Found X handle for ${target.team_name}: @${handle}`);
       res.json({ ok: true, x_handle: handle });
     } else {
@@ -494,7 +750,7 @@ Example responses:
   }
 });
 
-app.post("/api/targets/research", async (req, res) => {
+app.post("/api/targets/research", requireAuth, async (req, res) => {
   try {
     const { auto_discover_x_users = false, max_users_per_team = 5 } = req.body;
 
@@ -504,7 +760,7 @@ app.post("/api/targets/research", async (req, res) => {
     }
 
     // Get existing teams to avoid duplicates
-    const existingTeams = db.prepare("SELECT team_name FROM targets").all().map(t => t.team_name);
+    const existingTeams = req.db.prepare("SELECT team_name FROM targets").all().map(t => t.team_name);
     console.log(`📋 Found ${existingTeams.length} existing teams in database`);
 
     // Fetch real project data from AlphaGrowth and DeFiLlama
@@ -628,7 +884,7 @@ Include 15-20 companies. Focus on DeFi protocols (DEXs, lending, derivatives), w
 
     let inserted = 0;
     let skipped = 0;
-    const ins = db.prepare(`INSERT INTO targets (id, team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website, notes, sources_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`);
+    const ins = req.db.prepare(`INSERT INTO targets (id, team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website, notes, sources_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`);
     const ts = nowISO();
 
     for (const raw of teams) {
@@ -639,7 +895,7 @@ Include 15-20 companies. Focus on DeFi protocols (DEXs, lending, derivatives), w
         is_web3: 1,
         x_handle: raw?.x_handle ? String(raw.x_handle).replace("@", "").trim() : null,
         website: raw?.website ? String(raw.website).trim() : null,
-        notes: raw?.notes ? String(raw.notes) : null,
+        notes: raw?.notes ? stripCiteTags(raw.notes) : null,
         sources_json: JSON.stringify({ source: "claude_research", date: ts }),
       };
 
@@ -647,7 +903,7 @@ Include 15-20 companies. Focus on DeFi protocols (DEXs, lending, derivatives), w
       if (!qualifiesTarget(norm)) { skipped++; continue; }
 
       // Check if team already exists (by name, x_handle, or website)
-      const existingCheck = db.prepare(`
+      const existingCheck = req.db.prepare(`
         SELECT id FROM targets
         WHERE LOWER(TRIM(team_name)) = LOWER(TRIM(?))
         OR (? IS NOT NULL AND LOWER(TRIM(x_handle)) = LOWER(TRIM(?)))
@@ -686,7 +942,7 @@ Include 15-20 companies. Focus on DeFi protocols (DEXs, lending, derivatives), w
         if (!teamName) continue;
 
         // Check if this team was just inserted (has matching timestamp)
-        const target = db.prepare(`
+        const target = req.db.prepare(`
           SELECT * FROM targets
           WHERE LOWER(TRIM(team_name)) = LOWER(TRIM(?))
           AND created_at = ?
@@ -743,7 +999,7 @@ Include 15-20 companies. Focus on DeFi protocols (DEXs, lending, derivatives), w
           teamsWithXHandle.map(async (team) => {
             try {
               // Find the target ID we just created
-              const target = db.prepare("SELECT id FROM targets WHERE team_name = ? ORDER BY created_at DESC LIMIT 1").get(team.team_name);
+              const target = req.db.prepare("SELECT id FROM targets WHERE team_name = ? ORDER BY created_at DESC LIMIT 1").get(team.team_name);
 
               if (target) {
                 console.log(`🔍 Starting discovery for ${team.team_name} (@${team.x_handle})`);
@@ -789,12 +1045,12 @@ Include 15-20 companies. Focus on DeFi protocols (DEXs, lending, derivatives), w
   }
 });
 
-app.post("/api/targets/import", (req, res) => {
+app.post("/api/targets/import", requireAuth, (req, res) => {
   const items = Array.isArray(req.body?.items) ? req.body.items : null;
   if (!items) return res.status(400).json({ error: "items must be an array" });
   let inserted = 0;
   let skipped = 0;
-  const ins = db.prepare(`INSERT INTO targets (id, team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website, notes, sources_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`);
+  const ins = req.db.prepare(`INSERT INTO targets (id, team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website, notes, sources_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`);
   const ts = nowISO();
   for (const raw of items) {
     const norm = {
@@ -804,7 +1060,7 @@ app.post("/api/targets/import", (req, res) => {
       is_web3: (raw?.is_web3 === 1 || raw?.is_web3 === true || raw?.is_web3 === "1" || raw?.is_web3 === "true") ? 1 : 0,
       x_handle: raw?.x_handle ? String(raw.x_handle).replace("@", "").trim() : null,
       website: raw?.website ? String(raw.website).trim() : null,
-      notes: raw?.notes ? String(raw.notes) : null,
+      notes: raw?.notes ? stripCiteTags(raw.notes) : null,
       sources_json: raw?.sources ? JSON.stringify(raw.sources) : (raw?.sources_json || null),
     };
     if (!norm.team_name) { skipped++; continue; }
@@ -819,22 +1075,22 @@ app.post("/api/targets/import", (req, res) => {
   res.json({ ok: true, inserted, skipped });
 });
 
-app.post("/api/targets/:id/dismiss", (req, res) => {
+app.post("/api/targets/:id/dismiss", requireAuth, (req, res) => {
   const { id } = req.params;
-  const info = db.prepare(`UPDATE targets SET status = 'dismissed', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+  const info = req.db.prepare(`UPDATE targets SET status = 'dismissed', updated_at = ? WHERE id = ?`).run(nowISO(), id);
   if (info.changes === 0) return res.status(404).json({ error: "target not found" });
   res.json({ ok: true });
 });
 
-app.patch("/api/targets/:id", (req, res) => {
+app.patch("/api/targets/:id", requireAuth, (req, res) => {
   const { id } = req.params;
   const { x_handle, website, notes, raised_usd, monthly_revenue_usd } = req.body;
 
-  const target = db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+  const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
   if (!target) return res.status(404).json({ error: "target not found" });
 
   try {
-    db.prepare(`
+    req.db.prepare(`
       UPDATE targets
       SET x_handle = ?,
           website = ?,
@@ -851,33 +1107,33 @@ app.patch("/api/targets/:id", (req, res) => {
   }
 });
 
-app.delete("/api/targets/:id", (req, res) => {
+app.delete("/api/targets/:id", requireAuth, (req, res) => {
   const { id } = req.params;
 
   // Get target first to find associated data
-  const target = db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+  const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
   if (!target) return res.status(404).json({ error: "target not found" });
 
   try {
     // Delete associated drafts first (to avoid foreign key constraint)
-    const contactIds = db.prepare(`
+    const contactIds = req.db.prepare(`
       SELECT id FROM contacts WHERE company = ?
       UNION
       SELECT id FROM discovered_contacts WHERE target_id = ?
     `).all(target.team_name, id).map(r => r.id);
 
     for (const contactId of contactIds) {
-      db.prepare("DELETE FROM drafts WHERE contact_id = ?").run(contactId);
+      req.db.prepare("DELETE FROM drafts WHERE contact_id = ?").run(contactId);
     }
 
     // Delete discovered contacts
-    db.prepare("DELETE FROM discovered_contacts WHERE target_id = ?").run(id);
+    req.db.prepare("DELETE FROM discovered_contacts WHERE target_id = ?").run(id);
 
     // Delete contacts by company name
-    db.prepare("DELETE FROM contacts WHERE company = ?").run(target.team_name);
+    req.db.prepare("DELETE FROM contacts WHERE company = ?").run(target.team_name);
 
     // Finally delete the target
-    const info = db.prepare("DELETE FROM targets WHERE id = ?").run(id);
+    const info = req.db.prepare("DELETE FROM targets WHERE id = ?").run(id);
 
     console.log(`🗑️ Deleted target ${target.team_name} (id: ${id})`);
     res.json({ ok: true });
@@ -887,7 +1143,7 @@ app.delete("/api/targets/:id", (req, res) => {
   }
 });
 
-app.get("/api/health/claude", async (req, res) => {
+app.get("/api/health/claude", requireAuth, async (req, res) => {
   try {
     const msg = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -903,12 +1159,12 @@ app.get("/api/health/claude", async (req, res) => {
 });
 
 // Draft approval endpoint for relayer mode
-app.post("/api/drafts/:id/approve", (req, res) => {
+app.post("/api/drafts/:id/approve", requireAuth, (req, res) => {
   const { id } = req.params;
 
   try {
     // Update draft to approved status, clear prepared_at so relayer can pick it up
-    const info = db.prepare(`
+    const info = req.db.prepare(`
       UPDATE drafts
       SET status = 'approved',
           prepared_at = NULL,
@@ -928,29 +1184,11 @@ app.post("/api/drafts/:id/approve", (req, res) => {
   }
 });
 
-// Relayer authentication middleware
-function authenticateRelayer(req, res, next) {
-  const relayerApiKey = process.env.RELAYER_API_KEY;
-
-  // Skip auth if no key configured (local development)
-  if (!relayerApiKey) {
-    return next();
-  }
-
-  const providedKey = req.headers['x-relayer-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
-
-  if (!providedKey || providedKey !== relayerApiKey) {
-    return res.status(401).json({ error: "Unauthorized: Invalid relayer API key" });
-  }
-
-  next();
-}
-
 // Relayer API endpoints
 app.get("/api/relayer/approved-pending", authenticateRelayer, (req, res) => {
   try {
     // Find approved drafts and follow-ups that haven't been prepared yet
-    const rows = db.prepare(`
+    const rows = req.db.prepare(`
       SELECT
         d.id,
         d.message_text,
@@ -980,7 +1218,7 @@ app.post("/api/relayer/mark-prepared/:id", authenticateRelayer, (req, res) => {
 
   try {
     // Get the current status to preserve follow-up status
-    const draft = db.prepare(`SELECT status FROM drafts WHERE id = ?`).get(id);
+    const draft = req.db.prepare(`SELECT status FROM drafts WHERE id = ?`).get(id);
 
     if (!draft) {
       return res.status(404).json({ error: "Draft not found" });
@@ -989,7 +1227,7 @@ app.post("/api/relayer/mark-prepared/:id", authenticateRelayer, (req, res) => {
     // Keep 'followup' status, change 'approved' to 'sent'
     const newStatus = draft.status === 'followup' ? 'followup' : 'sent';
 
-    const info = db.prepare(`
+    const info = req.db.prepare(`
       UPDATE drafts
       SET prepared_at = ?, updated_at = ?, status = ?
       WHERE id = ?
@@ -1013,7 +1251,7 @@ app.post("/api/relayer/mark-failed/:id", authenticateRelayer, (req, res) => {
 
   try {
     // Clear prepared_at to allow retry
-    const info = db.prepare(`
+    const info = req.db.prepare(`
       UPDATE drafts
       SET prepared_at = NULL, updated_at = ?
       WHERE id = ?
@@ -1032,17 +1270,16 @@ app.post("/api/relayer/mark-failed/:id", authenticateRelayer, (req, res) => {
 });
 
 // Get draft queue (standalone route for backward compatibility)
-app.get("/api/queue", (req, res) => {
-  const rows = db.prepare(
+app.get("/api/queue", requireAuth, (req, res) => {
+  const rows = req.db.prepare(
     `SELECT d.*, c.name, c.company, c.title, c.telegram_handle FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.status IN ('queued','approved') ORDER BY d.created_at ASC`
   ).all();
   res.json(rows.map((r) => ({ ...r, tg: tgLinks(r.telegram_handle) })));
 });
 
-// Mount contact and draft routes
-app.use("/api/contacts", createContactRoutes(db, nanoid, nowISO, generateOutbound));
-app.use("/api/drafts", createDraftRoutes(
-  db,
+// Mount contact and draft routes (protected by requireAuth)
+app.use("/api/contacts", requireAuth, createContactRoutes(nanoid, nowISO, generateOutbound));
+app.use("/api/drafts", requireAuth, createDraftRoutes(
   nanoid,
   nowISO,
   tgLinks,
@@ -1055,18 +1292,20 @@ app.use("/api/drafts", createDraftRoutes(
   scheduleTelegramAutoSend,
   cancelTelegramAutoSend,
   splitIntoParagraphs,
-  sendMultiParagraphMessage
+  sendMultiParagraphMessage,
+  captureTelegramWindow,
+  extractResponseFromScreenshot
 ));
 
 // Initialize WorkflowEngine
 const workflowEngine = new WorkflowEngine(db, anthropic, generateOutbound, nowISO, nanoid);
 
-// X Authentication endpoint - manually trigger visible browser login
-app.post("/api/x-auth/login", async (req, res) => {
+// X Authentication endpoint - manually trigger visible browser login (protected by requireAuth)
+app.post("/api/x-auth/login", requireAuth, async (req, res) => {
   try {
-    console.log("[API] Manual X authentication requested");
+    console.log(`[API] Manual X authentication requested for: ${req.employeeId}`);
     const { authenticate } = await import("./lib/x-auth.js");
-    const success = await authenticate();
+    const success = await authenticate(req.db);
 
     if (success) {
       res.json({ ok: true, message: "Authentication successful - cookies saved" });
@@ -1079,9 +1318,24 @@ app.post("/api/x-auth/login", async (req, res) => {
   }
 });
 
-// Check X authentication status
-app.get("/api/x-auth/status", (req, res) => {
-  // Check if local x-cookies.json exists (for local development)
+// Check X authentication status (protected by requireAuth)
+app.get("/api/x-auth/status", requireAuth, (req, res) => {
+  // Check employee database first
+  const config = req.db.prepare("SELECT value FROM employee_config WHERE key = 'x_cookies'").get();
+  if (config) {
+    try {
+      const cookies = JSON.parse(config.value);
+      return res.json({
+        authenticated: true,
+        cookieCount: cookies.length,
+        source: "employee_database"
+      });
+    } catch (err) {
+      console.error('[X-AUTH-STATUS] Error parsing database cookies:', err.message);
+    }
+  }
+
+  // Fallback: Check if local x-cookies.json exists (for local development/backward compatibility)
   const localCookiesPath = path.join(process.cwd(), 'x-cookies.json');
   if (fs.existsSync(localCookiesPath)) {
     try {
@@ -1096,7 +1350,7 @@ app.get("/api/x-auth/status", (req, res) => {
     }
   }
 
-  // Check if X_COOKIES environment variable is set (for Railway)
+  // Fallback: Check if X_COOKIES environment variable is set (for Railway)
   if (process.env.X_COOKIES) {
     try {
       const envCookies = JSON.parse(process.env.X_COOKIES);
@@ -1113,17 +1367,17 @@ app.get("/api/x-auth/status", (req, res) => {
   // Not authenticated
   return res.json({
     authenticated: false,
-    message: "Not authenticated - please set up x-cookies.json or X_COOKIES environment variable"
+    message: "Not authenticated - please authenticate via X login"
   });
 });
 
-// Mount workflow routes (must come BEFORE other target routes)
-app.use("/api/workflow", createWorkflowRoutes(workflowEngine));
+// Mount workflow routes (must come BEFORE other target routes, protected by requireAuth)
+app.use("/api/workflow", requireAuth, createWorkflowRoutes(workflowEngine));
 
 // Note: createTargetRoutes adds routes to /api/targets/:id/discover-x-users
 // This must be registered AFTER other /api/targets routes to avoid conflicts
-const targetDiscoveryRouter = createTargetRoutes(db, workflowEngine, anthropic, nanoid, nowISO, qualifiesTarget, apolloClient);
-app.use("/api/targets", targetDiscoveryRouter);
+const targetDiscoveryRouter = createTargetRoutes(workflowEngine, anthropic, nanoid, nowISO, qualifiesTarget, apolloClient);
+app.use("/api/targets", requireAuth, targetDiscoveryRouter);
 
 (async () => {
   // Fetch Alchemy Data API documentation
@@ -1189,18 +1443,16 @@ app.use("/api/targets", targetDiscoveryRouter);
   global.ALCHEMY_NODE_INFO = ALCHEMY_NODE_INFO;
 
   // Catch-all route for client-side routing (must be after all API routes)
-  if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
-    app.use((req, res) => {
-      // Only handle GET requests for non-API routes
-      if (req.method === 'GET' && !req.path.startsWith('/api')) {
-        const nextIndexPath = path.join(process.cwd(), 'frontend', 'out', 'index.html');
-        if (fs.existsSync(nextIndexPath)) {
-          return res.sendFile(nextIndexPath);
-        }
+  app.use((req, res) => {
+    // Only handle GET requests for non-API routes
+    if (req.method === 'GET' && !req.path.startsWith('/api')) {
+      const nextIndexPath = path.join(process.cwd(), 'frontend', 'out', 'index.html');
+      if (fs.existsSync(nextIndexPath)) {
+        return res.sendFile(nextIndexPath);
       }
-      res.status(404).send('Page not found');
-    });
-  }
+    }
+    res.status(404).send('Page not found');
+  });
 
   const port = Number(process.env.PORT || 3000);
   app.listen(port, () => {

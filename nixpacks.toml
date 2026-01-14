@@ -1,7 +1,32 @@
 # Nixpacks configuration for Railway
 
 [phases.setup]
-nixPkgs = ["nodejs_20"]
+# Node.js 20 + Chromium and required libraries for Puppeteer
+nixPkgs = [
+  "nodejs_20",
+  "chromium",
+  "nss",
+  "freetype",
+  "harfbuzz",
+  "ca-certificates",
+  "fontconfig"
+]
+
+# Additional system packages for Puppeteer
+aptPkgs = [
+  "libnss3",
+  "libatk1.0-0",
+  "libatk-bridge2.0-0",
+  "libcups2",
+  "libdrm2",
+  "libxkbcommon0",
+  "libxcomposite1",
+  "libxdamage1",
+  "libxfixes3",
+  "libxrandr2",
+  "libgbm1",
+  "libasound2"
+]
 
 [phases.install]
 cmds = [

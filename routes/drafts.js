@@ -4,9 +4,9 @@ import path from "node:path";
 
 /**
  * Draft routes
+ * NOTE: db is now accessed via req.db (set by authentication middleware)
  */
 export function createDraftRoutes(
-  db,
   nanoid,
   nowISO,
   tgLinks,
@@ -19,7 +19,9 @@ export function createDraftRoutes(
   scheduleTelegramAutoSend,
   cancelTelegramAutoSend,
   splitIntoParagraphs,
-  sendMultiParagraphMessage
+  sendMultiParagraphMessage,
+  captureTelegramWindow,
+  extractResponseFromScreenshot
 ) {
   const router = Router();
 
@@ -29,7 +31,7 @@ export function createDraftRoutes(
 
   // Get all drafts with contact information
   router.get("/", (req, res) => {
-    const rows = db.prepare(`
+    const rows = req.db.prepare(`
       SELECT d.*, c.name, c.company, c.title, c.telegram_handle
       FROM drafts d
       JOIN contacts c ON c.id = d.contact_id
@@ -43,12 +45,12 @@ export function createDraftRoutes(
     try {
       const { contact_id } = req.body;
       if (!contact_id) return res.status(400).json({ error: "contact_id is required" });
-      const contact = db.prepare("SELECT * FROM contacts WHERE id = ?").get(contact_id);
+      const contact = req.db.prepare("SELECT * FROM contacts WHERE id = ?").get(contact_id);
       if (!contact) return res.status(404).json({ error: "contact not found" });
       const message_text = await generateOutbound(contact);
       const id = nanoid();
       const ts = nowISO();
-      db.prepare(
+      req.db.prepare(
         `INSERT INTO drafts (id, contact_id, channel, message_text, status, prepared_at, created_at, updated_at) VALUES (?, ?, 'telegram', ?, 'queued', NULL, ?, ?)`
       ).run(id, contact_id, message_text, ts, ts);
       res.json({ id, message_text });
@@ -69,7 +71,7 @@ export function createDraftRoutes(
       const { id } = req.params;
       const { feedback } = req.body;
 
-      const draft = db.prepare(
+      const draft = req.db.prepare(
         `SELECT d.*, c.* FROM drafts d JOIN contacts c ON d.contact_id = c.id WHERE d.id = ?`
       ).get(id);
       if (!draft) return res.status(404).json({ error: "draft not found" });
@@ -89,14 +91,14 @@ export function createDraftRoutes(
 
       // Update the draft with new message
       const ts = nowISO();
-      db.prepare(
+      req.db.prepare(
         `UPDATE drafts SET message_text = ?, updated_at = ? WHERE id = ?`
       ).run(message_text, ts, id);
 
       // If feedback was provided, save to feedback history
       if (feedback) {
         const feedbackId = nanoid();
-        db.prepare(
+        req.db.prepare(
           `INSERT INTO draft_feedback (id, draft_id, feedback_text, previous_message, regenerated_message, created_at)
            VALUES (?, ?, ?, ?, ?, ?)`
         ).run(feedbackId, id, feedback, previousMessage, message_text, ts);
@@ -115,10 +117,20 @@ export function createDraftRoutes(
     }
   });
 
-  // Get follow-up drafts
+  // Get follow-up drafts (only contacts that have actual follow-up messages)
   router.get("/followups", (req, res) => {
-    const rows = db.prepare(
-      `SELECT d.*, c.name, c.company, c.title, c.telegram_handle FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.status = 'followup' ORDER BY d.updated_at DESC LIMIT 50`
+    // Only show contacts where at least one message has status='followup'
+    // This excludes contacts that only have initial sent messages
+    const rows = req.db.prepare(
+      `SELECT d.*, c.name, c.company, c.title, c.telegram_handle
+       FROM drafts d
+       JOIN contacts c ON c.id = d.contact_id
+       WHERE d.contact_id IN (
+         SELECT DISTINCT contact_id FROM drafts WHERE status = 'followup'
+       )
+       AND d.status IN ('followup', 'sent')
+       ORDER BY d.updated_at DESC
+       LIMIT 100`
     ).all();
     res.json(rows.map((r) => ({ ...r, tg: tgLinks(r.telegram_handle) })));
   });
@@ -126,20 +138,20 @@ export function createDraftRoutes(
   // Get full conversation history for a contact (original sent + all follow-ups)
   router.get("/contact/:contact_id/history", (req, res) => {
     const { contact_id } = req.params;
-    const rows = db.prepare(
+    const rows = req.db.prepare(
       `SELECT d.*, c.name, c.company, c.title, c.telegram_handle
        FROM drafts d
        JOIN contacts c ON c.id = d.contact_id
        WHERE d.contact_id = ?
        AND d.status IN ('sent', 'followup')
-       ORDER BY d.updated_at ASC`
+       ORDER BY d.updated_at DESC`
     ).all(contact_id);
     res.json(rows.map((r) => ({ ...r, tg: tgLinks(r.telegram_handle) })));
   });
 
   // Get sent drafts (exclude contacts that have follow-ups)
   router.get("/sent", (req, res) => {
-    const rows = db.prepare(
+    const rows = req.db.prepare(
       `SELECT d.*, c.name, c.company, c.title, c.telegram_handle
        FROM drafts d
        JOIN contacts c ON c.id = d.contact_id
@@ -160,7 +172,7 @@ export function createDraftRoutes(
     const { id } = req.params;
     const { message_text } = req.body;
     if (!message_text) return res.status(400).json({ error: "message_text is required" });
-    const info = db.prepare(`UPDATE drafts SET message_text = ?, updated_at = ? WHERE id = ?`).run(
+    const info = req.db.prepare(`UPDATE drafts SET message_text = ?, updated_at = ? WHERE id = ?`).run(
       message_text,
       nowISO(),
       id
@@ -174,12 +186,12 @@ export function createDraftRoutes(
     const { id } = req.params;
 
     // Get draft with contact info for saving to style file
-    const row = db.prepare(
+    const row = req.db.prepare(
       `SELECT d.*, c.name, c.company FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.id = ?`
     ).get(id);
     if (!row) return res.status(404).json({ error: "draft not found" });
 
-    const info = db.prepare(`UPDATE drafts SET status = 'approved', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+    const info = req.db.prepare(`UPDATE drafts SET status = 'approved', updated_at = ? WHERE id = ?`).run(nowISO(), id);
     if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
 
     // Save approved message to SDR style file for future learning
@@ -205,7 +217,7 @@ export function createDraftRoutes(
       return res.status(400).json({ error: "message_text is required" });
     }
 
-    const info = db.prepare(`UPDATE drafts SET message_text = ?, updated_at = ? WHERE id = ?`)
+    const info = req.db.prepare(`UPDATE drafts SET message_text = ?, updated_at = ? WHERE id = ?`)
       .run(message_text.trim(), nowISO(), id);
 
     if (info.changes === 0) {
@@ -223,13 +235,13 @@ export function createDraftRoutes(
       const { id } = req.params;
       const overrideText =
         req.body && typeof req.body.message_text === "string" ? req.body.message_text : null;
-      const row = db.prepare(
+      const row = req.db.prepare(
         `SELECT d.*, c.telegram_handle, c.name, c.company, c.x_username, c.email FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.id = ?`
       ).get(id);
       if (!row) return res.status(404).json({ error: "draft not found" });
 
       // Mark as sent immediately (instead of just approved)
-      const info = db.prepare(`UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+      const info = req.db.prepare(`UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ?`).run(nowISO(), id);
       if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
 
       const textToSend = overrideText ?? row.message_text;
@@ -247,7 +259,7 @@ export function createDraftRoutes(
 
       // Send data to Clay webhook
       try {
-        const target = db.prepare("SELECT team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website FROM targets WHERE team_name = ?").get(row.company);
+        const target = req.db.prepare("SELECT team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website FROM targets WHERE team_name = ?").get(row.company);
 
         const webhookUrl = process.env.CLAY_WEBHOOK_URL || "https://api.clay.com/v3/sources/webhook/pull-in-data-from-a-webhook-c4374a91-d3c7-4a84-905c-9069c0d4a514";
 
@@ -336,14 +348,21 @@ export function createDraftRoutes(
   // Generate a follow-up message
   router.post("/generate-followup", async (req, res) => {
     try {
-      const { contact_name, company, original_message } = req.body;
+      const { contact_name, company, original_message, feedback, current_followup, their_response } = req.body;
       if (!contact_name || !company || !original_message) {
         return res.status(400).json({ error: "contact_name, company, and original_message are required" });
       }
 
       console.log(`✍️ Generating follow-up for ${contact_name} at ${company}...`);
+      if (their_response) {
+        console.log(`📨 Their response: "${their_response.substring(0, 100)}..."`);
+      }
 
-      const message_text = await generateFollowUp(contact_name, company, original_message);
+      const message_text = await generateFollowUp(contact_name, company, original_message, {
+        feedback,
+        currentFollowup: current_followup,
+        theirResponse: their_response,
+      });
 
       res.json({ message_text });
     } catch (e) {
@@ -375,7 +394,7 @@ export function createDraftRoutes(
 
       // If on Mac, set prepared_at so we can do local automation immediately
       // If not on Mac (Railway), set prepared_at=NULL so relayer picks it up
-      db.prepare(
+      req.db.prepare(
         `INSERT INTO drafts (id, contact_id, channel, message_text, status, prepared_at, created_at, updated_at) VALUES (?, ?, 'telegram', ?, 'followup', ?, ?, ?)`
       ).run(followUpId, contact_id, message_text, IS_MAC ? ts : null, ts, ts);
 
@@ -391,10 +410,10 @@ export function createDraftRoutes(
 
       // Send data to Clay webhook
       try {
-        const target = db.prepare("SELECT team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website FROM targets WHERE team_name = ?").get(company);
+        const target = req.db.prepare("SELECT team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website FROM targets WHERE team_name = ?").get(company);
 
         // Get contact's x_username and email from database
-        const contact = db.prepare("SELECT x_username, email FROM contacts WHERE id = ?").get(contact_id);
+        const contact = req.db.prepare("SELECT x_username, email FROM contacts WHERE id = ?").get(contact_id);
 
         const webhookUrl = process.env.CLAY_WEBHOOK_URL || "https://api.clay.com/v3/sources/webhook/pull-in-data-from-a-webhook-c4374a91-d3c7-4a84-905c-9069c0d4a514";
 
@@ -443,20 +462,32 @@ export function createDraftRoutes(
       // If on Mac, do local automation
       // If on Railway, relayer will handle it
       if (IS_MAC) {
-        // Copy to clipboard
-        setClipboardMac(message_text);
-
         // Open Telegram
         openTelegramDesktopLink(telegram_handle);
-        await new Promise((r) => setTimeout(r, 700));
+        await new Promise((r) => setTimeout(r, 1000)); // Slightly longer wait for Telegram to fully load
 
-        // Paste
-        await pasteIntoTelegram();
+        // Split message into paragraphs and send each separately
+        const paragraphs = splitIntoParagraphs(message_text);
+        console.log(`📝 Follow-up has ${paragraphs.length} paragraph(s)`);
 
-        // Schedule auto-send
-        scheduleTelegramAutoSend(followUpId);
+        if (paragraphs.length === 0) {
+          throw new Error("No paragraphs found in message");
+        }
 
-        res.json({ ok: true, auto_send: AUTO_SEND_ENABLED, auto_send_after_seconds: AUTO_SEND_IDLE_SECONDS });
+        if (paragraphs.length === 1) {
+          // Single paragraph: use original flow for simplicity
+          console.log("📤 Sending single paragraph follow-up");
+          setClipboardMac(message_text);
+          await pasteIntoTelegram();
+          scheduleTelegramAutoSend(followUpId);
+          res.json({ ok: true, paragraph_count: 1, auto_send: AUTO_SEND_ENABLED, auto_send_after_seconds: AUTO_SEND_IDLE_SECONDS });
+        } else {
+          // Multiple paragraphs: send each separately
+          console.log(`📤 Sending ${paragraphs.length} paragraphs as separate messages`);
+          await sendMultiParagraphMessage(paragraphs);
+          // No scheduleTelegramAutoSend() needed - each paragraph sent immediately
+          res.json({ ok: true, paragraph_count: paragraphs.length, auto_send: false, auto_send_after_seconds: 0 });
+        }
       } else {
         // On Railway - relayer will pick it up
         console.log(`✅ Follow-up draft created for relayer (ID: ${followUpId})`);
@@ -472,7 +503,7 @@ export function createDraftRoutes(
   router.post("/:id/mark-sent", (req, res) => {
     const { id } = req.params;
     cancelTelegramAutoSend(id);
-    const info = db.prepare(`UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+    const info = req.db.prepare(`UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ?`).run(nowISO(), id);
     if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
     res.json({ ok: true });
   });
@@ -481,9 +512,49 @@ export function createDraftRoutes(
   router.post("/:id/skip", (req, res) => {
     const { id } = req.params;
     cancelTelegramAutoSend(id);
-    const info = db.prepare(`UPDATE drafts SET status = 'skipped', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+    const info = req.db.prepare(`UPDATE drafts SET status = 'skipped', updated_at = ? WHERE id = ?`).run(nowISO(), id);
     if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
     res.json({ ok: true });
+  });
+
+  // Capture response from Telegram (opens Telegram, takes screenshot, extracts response via Claude Vision)
+  router.post("/capture-response", async (req, res) => {
+    try {
+      const { telegram_handle } = req.body;
+
+      if (!telegram_handle) {
+        return res.status(400).json({ error: "telegram_handle is required" });
+      }
+
+      console.log(`📸 Capturing response from Telegram for @${telegram_handle}...`);
+
+      // 1. Open Telegram to the contact's chat
+      openTelegramDesktopLink(telegram_handle);
+
+      // 2. Wait for Telegram to open and load the chat
+      await new Promise(r => setTimeout(r, 2000));
+
+      // 3. Capture screenshot of Telegram window
+      console.log("📷 Taking screenshot of Telegram window...");
+      const screenshotPath = await captureTelegramWindow();
+
+      // 4. Extract response using Claude Vision
+      console.log("🔍 Extracting response using Claude Vision...");
+      const extractedResponse = await extractResponseFromScreenshot(screenshotPath);
+
+      // 5. Check if no response was found
+      if (extractedResponse === "NO_RESPONSE" || extractedResponse.toUpperCase().includes("NO_RESPONSE")) {
+        console.log("❌ No response found from contact");
+        return res.status(404).json({ error: "no_response", message: "No response found from the contact" });
+      }
+
+      console.log(`✅ Extracted response: "${extractedResponse.substring(0, 100)}..."`);
+
+      res.json({ response: extractedResponse });
+    } catch (e) {
+      console.error("capture-response error:", e?.message || e);
+      res.status(500).json({ error: "failed to capture response", message: e?.message });
+    }
   });
 
   return router;

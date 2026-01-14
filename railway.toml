@@ -16,3 +16,7 @@ name = "sdr-console"
 path = "/"
 timeout = 100
 interval = 30
+
+# Persistent volume for employee databases
+[[volumes]]
+mountPath = "/app/databases"

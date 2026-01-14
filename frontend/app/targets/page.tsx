@@ -8,12 +8,14 @@ import { api } from '@/lib/api-client'
 import { Target } from '@/lib/types'
 import { toast } from 'sonner'
 import { EditTargetModal } from '@/components/edit-target-modal'
+import { ImportTargetsModal } from '@/components/import-targets-modal'
 
 export default function TargetsPage() {
   const [targets, setTargets] = useState<Target[]>([])
   const [loading, setLoading] = useState(true)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null)
+  const [importModalOpen, setImportModalOpen] = useState(false)
 
   useEffect(() => {
     loadTargets()
@@ -82,20 +84,17 @@ export default function TargetsPage() {
               <span className="text-2xl">🎯</span>
             </div>
             <div>
-              <CardTitle className="text-xl text-foreground">Top Target Teams</CardTitle>
+              <CardTitle className="text-xl text-foreground">Research Teams</CardTitle>
               <p className="text-sm text-muted-foreground">
                 Web3 teams with ≥ $10M raised OR ≥ $500k monthly revenue
               </p>
             </div>
           </div>
           <div className="flex gap-2 mt-4">
-            <Button variant="outline" onClick={loadTargets} className="border-border/50 hover:bg-primary/10 hover:border-primary">
-              Refresh
-            </Button>
             <Button onClick={handleResearch} disabled={loading} className="bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">
               🔍 Research
             </Button>
-            <Button variant="outline" className="border-border/50 hover:bg-primary/10 hover:border-primary">
+            <Button variant="outline" onClick={() => setImportModalOpen(true)} className="border-border/50 hover:bg-primary/10 hover:border-primary">
               + Import
             </Button>
           </div>
@@ -187,6 +186,12 @@ export default function TargetsPage() {
           onSuccess={loadTargets}
         />
       )}
+
+      <ImportTargetsModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        onSuccess={loadTargets}
+      />
     </div>
   )
 }

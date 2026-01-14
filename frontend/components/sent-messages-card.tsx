@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api-client'
 import { DraftWithContact } from '@/lib/types'
-import { MessageCircle, X, Loader2, Sparkles } from 'lucide-react'
+import { MessageCircle, X, Loader2, MessageSquareReply } from 'lucide-react'
 import { FollowupModal } from './followup-modal'
 import { ImproveMessageModal } from './improve-message-modal'
 import { EditContactModal } from './edit-contact-modal'
@@ -29,6 +29,8 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null)
   const [editedMessages, setEditedMessages] = useState<Record<string, string>>({})
   const [editingContact, setEditingContact] = useState<DraftWithContact | null>(null)
+  const [capturedResponse, setCapturedResponse] = useState<string | null>(null)
+  const [capturingResponse, setCapturingResponse] = useState<string | null>(null)
 
   useEffect(() => {
     loadSentMessages()
@@ -38,7 +40,25 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
     try {
       // Use /sent endpoint which excludes contacts that have follow-ups
       const data = await api.get<DraftWithContact[]>('/api/drafts/sent')
-      setDrafts(data.slice(0, 10))
+
+      // Sort: contacts needing follow-up (48+ hours) at top, others at bottom
+      const fortyEightHours = 48 * 60 * 60 * 1000
+      const now = Date.now()
+      const sortedData = [...data].sort((a, b) => {
+        const aLastTime = new Date(a.updated_at).getTime()
+        const bLastTime = new Date(b.updated_at).getTime()
+        const aNeedsFollowUp = (now - aLastTime) >= fortyEightHours
+        const bNeedsFollowUp = (now - bLastTime) >= fortyEightHours
+
+        // Contacts needing follow-up come first
+        if (aNeedsFollowUp && !bNeedsFollowUp) return -1
+        if (!aNeedsFollowUp && bNeedsFollowUp) return 1
+
+        // Within same category, sort by oldest first (most urgent at top)
+        return aLastTime - bLastTime
+      })
+
+      setDrafts(sortedData.slice(0, 10))
     } catch (error) {
       console.error('Failed to load sent messages:', error)
     } finally {
@@ -78,6 +98,28 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
       draft.id === draftId ? { ...draft, message_text: newMessage } : draft
     ))
     // Don't close modal - let user close it manually after reviewing the improved message
+  }
+
+  const handleRespondedClick = async (draft: DraftWithContact) => {
+    setCapturingResponse(draft.id)
+    try {
+      toast.info('Opening Telegram and capturing response...')
+      const result = await api.post<{ response: string }>('/api/drafts/capture-response', {
+        telegram_handle: draft.telegram_handle
+      })
+      setCapturedResponse(result.response)
+      setSelectedDraft(draft)
+      setFollowupModalOpen(true)
+      toast.success('Response captured!')
+    } catch (error: any) {
+      if (error.message?.includes('no_response') || error.message?.includes('No response found')) {
+        toast.error('No Response Found')
+      } else {
+        toast.error('Failed to capture response')
+      }
+    } finally {
+      setCapturingResponse(null)
+    }
   }
 
   const handleEditContact = (draft: DraftWithContact) => {
@@ -122,22 +164,33 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
             </div>
           ) : (
             <div className="space-y-4">
-              {drafts.map((draft) => (
+              {drafts.map((draft) => {
+                // Check if last message was sent more than 48 hours ago
+                const lastMessageTime = new Date(draft.updated_at).getTime()
+                const hoursSinceLastMessage = (Date.now() - lastMessageTime) / (1000 * 60 * 60)
+                const needsFollowUp = hoursSinceLastMessage >= 48
+
+                return (
                 <div key={draft.id} className="border border-border/50 rounded-lg p-4 space-y-3 hover:border-success/30 transition-all bg-card/30">
                   <div className="flex items-center justify-between">
-                    <div
-                      className="font-semibold text-foreground cursor-pointer hover:text-primary transition-colors"
-                      onClick={() => handleEditContact(draft)}
-                      title="Click to edit contact details"
-                    >
-                      {draft.company}
+                    <div className="flex items-center gap-2">
+                      {needsFollowUp && (
+                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="No follow-up in 48+ hours" />
+                      )}
+                      <div
+                        className="font-semibold text-foreground cursor-pointer hover:text-primary transition-colors"
+                        onClick={() => handleEditContact(draft)}
+                        title="Click to edit contact details"
+                      >
+                        {draft.company}
+                      </div>
                     </div>
                     <Badge className="bg-success/10 text-success border-success/30 text-xs px-2 py-0.5">
                       sent
                     </Badge>
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {draft.name} • @{draft.telegram_handle}
+                    {draft.name} • @{draft.telegram_handle} • Sent: {new Date(draft.updated_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })}
                   </div>
                   <Textarea
                     value={editedMessages[draft.id] ?? draft.message_text}
@@ -155,19 +208,9 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleImproveMessage(draft)}
-                      disabled={actionLoading === draft.id}
-                      className="hover:bg-primary/10 hover:border-primary hover:text-primary transition-all border-border/50"
-                      title="Improve message with feedback"
-                    >
-                      <Sparkles className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 hover:bg-success/10 hover:border-success hover:text-success transition-all border-border/50"
+                      className="flex-1 hover:bg-amber/10 hover:border-amber hover:text-amber transition-all border-border/50"
                       onClick={() => handleFollowupClick(draft)}
-                      disabled={actionLoading === draft.id}
+                      disabled={actionLoading === draft.id || capturingResponse === draft.id}
                     >
                       <MessageCircle className="mr-2 h-4 w-4" />
                       Send Follow-up
@@ -175,22 +218,36 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
                     <Button
                       variant="outline"
                       size="sm"
+                      className="hover:bg-primary/10 hover:border-primary hover:text-primary transition-all border-border/50"
+                      onClick={() => handleRespondedClick(draft)}
+                      disabled={actionLoading === draft.id || capturingResponse === draft.id}
+                      title="Capture their response from Telegram"
+                    >
+                      {capturingResponse === draft.id ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <MessageSquareReply className="mr-2 h-4 w-4" />
+                      )}
+                      Responded
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="hover:bg-destructive/10 hover:border-destructive hover:text-destructive transition-all border-border/50"
                       onClick={() => handleDismiss(draft.id)}
-                      disabled={actionLoading === draft.id}
+                      disabled={actionLoading === draft.id || capturingResponse === draft.id}
+                      title="Dismiss message"
                     >
                       {actionLoading === draft.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <>
-                          <X className="mr-2 h-4 w-4" />
-                          Dismiss
-                        </>
+                        <X className="h-4 w-4" />
                       )}
                     </Button>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </ScrollArea>
@@ -199,9 +256,13 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
       {selectedDraft && (
         <FollowupModal
           open={followupModalOpen}
-          onOpenChange={setFollowupModalOpen}
+          onOpenChange={(open) => {
+            setFollowupModalOpen(open)
+            if (!open) setCapturedResponse(null)
+          }}
           draft={selectedDraft}
           onSuccess={handleFollowupSuccess}
+          capturedResponse={capturedResponse}
         />
       )}
 

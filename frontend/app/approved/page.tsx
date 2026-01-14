@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api-client'
 import { Target } from '@/lib/types'
 import { toast } from 'sonner'
-import { Plus, Search as SearchIcon, Users } from 'lucide-react'
+import { Plus, Search as SearchIcon, Users, X } from 'lucide-react'
 import { ContactsModal } from '@/components/contacts-modal'
 import { EditTargetModal } from '@/components/edit-target-modal'
 
@@ -72,6 +72,16 @@ export default function ApprovedPage() {
     }
   }
 
+  const handleDismiss = async (id: string) => {
+    try {
+      await api.post(`/api/targets/${id}/dismiss`, {})
+      toast.success('Target removed')
+      await loadTargets()
+    } catch (error) {
+      toast.error('Failed to remove target')
+    }
+  }
+
   const handleViewContacts = async (target: TargetWithMessages) => {
     setActionLoading(target.id + '-view')
     try {
@@ -127,18 +137,27 @@ export default function ApprovedPage() {
               {targets.map((target) => (
                 <div key={target.id} className="border border-border/50 rounded-lg p-4 space-y-3 hover:border-purple/30 hover:shadow-lg transition-all bg-card/30">
                   <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedTargetForEdit(target as Target)
+                          setEditModalOpen(true)
+                        }}
+                        className="font-semibold text-foreground hover:text-primary hover:underline transition-colors text-left"
+                      >
+                        {target.team_name}
+                      </button>
+                      {target.is_web3 === 1 && (
+                        <Badge className="bg-primary/10 text-primary border-primary/30">Web3</Badge>
+                      )}
+                    </div>
                     <button
-                      onClick={() => {
-                        setSelectedTargetForEdit(target as Target)
-                        setEditModalOpen(true)
-                      }}
-                      className="font-semibold text-foreground hover:text-primary hover:underline transition-colors text-left"
+                      onClick={() => handleDismiss(target.id)}
+                      className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                      title="Remove target"
                     >
-                      {target.team_name}
+                      <X className="h-4 w-4" />
                     </button>
-                    {target.is_web3 === 1 && (
-                      <Badge className="bg-primary/10 text-primary border-primary/30">Web3</Badge>
-                    )}
                   </div>
 
                   {(target.x_handle || target.website) && (
