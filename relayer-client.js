@@ -3,6 +3,7 @@ import clipboardy from "clipboardy";
 import open from "open";
 import { exec } from "child_process";
 import fs from "fs";
+import Database from "better-sqlite3";
 
 // Configuration from environment
 const RENDER_URL = process.env.RENDER_URL || "http://localhost:3000";
@@ -432,20 +433,30 @@ async function processXAuthRequest(request) {
   log(`\n🔑 Processing X authentication request ${request.id}`);
 
   try {
-    // Open X login page
-    await open("https://x.com/login");
-    log("🌐 Opened X login page in browser");
-    log("⏳ Please login to X in the browser...");
-    log("   Waiting 60 seconds for login...");
+    // Import the authentication function from local lib/x-auth.js
+    const { authenticate } = await import("./lib/x-auth.js");
 
-    // Wait 60 seconds for user to complete login
-    await new Promise(r => setTimeout(r, 60000));
+    // Open employee database to save cookies
+    const dbPath = `./databases/${EMPLOYEE_ID}/data.db`;
+    const db = new Database(dbPath);
 
-    log("✅ Assuming login completed");
-    log("🍪 Cookies will be automatically captured by server on next X search");
+    log("🌐 Opening X login page in browser...");
+    log("⏳ Please login to X - will auto-detect when complete");
+    log("   Browser will close automatically after successful login");
 
-    await completeXAuthRequest(request.id, true);
-    log(`✅ X authentication request ${request.id} completed`);
+    // Call the authenticate function which properly waits for login
+    const success = await authenticate(db);
+
+    db.close();
+
+    if (success) {
+      log("✅ X authentication successful!");
+      log("🍪 Cookies saved - X search will now work");
+      await completeXAuthRequest(request.id, true);
+      log(`✅ X authentication request ${request.id} completed`);
+    } else {
+      throw new Error("Authentication failed - login timeout or error");
+    }
   } catch (error) {
     log(`❌ Failed to complete X auth: ${error.message}`);
     await completeXAuthRequest(request.id, false, error.message);
