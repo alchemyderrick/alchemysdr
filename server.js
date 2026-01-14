@@ -267,6 +267,11 @@ app.post('/api/auth/logout', (req, res) => {
 
 // Check auth status endpoint
 app.get('/api/auth/status', (req, res) => {
+  console.log('[AUTH STATUS] Session ID:', req.sessionID);
+  console.log('[AUTH STATUS] Session data:', req.session);
+  console.log('[AUTH STATUS] Cookies:', req.cookies);
+  console.log('[AUTH STATUS] Headers:', req.headers.cookie);
+
   if (req.session.employeeId) {
     res.json({
       authenticated: true,
