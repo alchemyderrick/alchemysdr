@@ -37,7 +37,20 @@ export const api = {
     })
 
     if (!res.ok) {
-      throw new APIError(res.status, `API error: ${res.statusText}`)
+      // Try to parse error response body for more details
+      let errorMessage = `API error: ${res.statusText}`
+      try {
+        const errorData = await res.json()
+        if (errorData.error) {
+          errorMessage = errorData.error
+        }
+        if (errorData.message) {
+          errorMessage = errorData.message
+        }
+      } catch (e) {
+        // If parsing fails, use statusText
+      }
+      throw new APIError(res.status, errorMessage)
     }
 
     return res.json()
