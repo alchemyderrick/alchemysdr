@@ -1,0 +1,17 @@
+{
+  "name": "sdr-relayer-client",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "SDR Console Relayer Client - Telegram automation for employee workstations",
+  "scripts": {
+    "start": "node relayer-client.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "clipboardy": "^5.0.2",
+    "open": "^10.0.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

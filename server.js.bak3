@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { WorkflowEngine } from "./lib/workflow-engine.js";
 import { initializeDatabase, getDatabaseForEmployee, closeAllDatabases } from "./lib/database.js";
-import { createUser, verifyUser, getUserByEmployeeId, getAllUsers } from "./lib/auth.js";
+import { verifyUser, getUserByEmployeeId, getAllUsers } from "./lib/auth.js";
 import {
   nowISO,
   tgLinks,
@@ -39,18 +39,15 @@ import { createApolloClient } from "./lib/apollo-search.js";
 
 const app = express();
 
-// Trust Railway proxy for secure cookies
-app.set('trust proxy', 1);
-
 // Helper to strip citation tags from text (e.g., <cite index="46-3,46-4">)
 function stripCiteTags(text) {
   if (!text) return text;
   return String(text).replace(/<cite[^>]*>/gi, '').replace(/<\/cite>/gi, '').trim();
 }
 
-// CORS configuration - allow same origin and credentials
+// CORS configuration for React frontend
 app.use(cors({
-  origin: true, // Allow same-origin requests (Next.js static export served from same domain)
+  origin: process.env.FRONTEND_URL || 'http://localhost:3001',
   credentials: true,
 }));
 
@@ -58,7 +55,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
-// Session setup for authentication (BEFORE request logging)
+// Session setup for authentication
 const SessionStore = SqliteStore(session);
 app.use(session({
   store: new SessionStore({
@@ -71,48 +68,29 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'change-this-in-production-please',
   resave: false,
   saveUninitialized: false,
-  proxy: true, // Trust proxy for secure cookies
   cookie: {
-    secure: false, // Temporarily disable to debug Railway proxy issue
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    sameSite: 'lax', // Allow same-site navigation
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    path: '/'
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   }
 }));
-
-// Request logging middleware (for debugging) - AFTER session middleware
-app.use((req, res, next) => {
-  if (req.path.includes('/api/drafts')) {
-    console.log(`[REQUEST] ${req.method} ${req.path}`);
-    console.log(`[REQUEST] Body:`, req.body);
-    console.log(`[REQUEST] Session:`, req.session?.employeeId || 'NO SESSION');
-    console.log(`[REQUEST] Cookies:`, req.cookies);
-  }
-  next();
-});
 
 // Serve static files from current directory
 app.use(express.static(process.cwd()));
 
-// Serve Next.js static export (both dev and production)
-const frontendOutPath = path.join(process.cwd(), 'frontend', 'out');
+// In production/Railway, serve Next.js static export
+if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+  const frontendOutPath = path.join(process.cwd(), 'frontend', 'out');
 
-// Check if Next.js static export exists
-if (fs.existsSync(frontendOutPath)) {
-  console.log("📦 Serving Next.js static export from frontend/out");
+  // Check if Next.js static export exists
+  if (fs.existsSync(frontendOutPath)) {
+    console.log("📦 Serving Next.js static export from frontend/out");
 
-  // List files to verify build
-  const files = fs.readdirSync(frontendOutPath);
-  console.log("📄 Frontend files:", files.slice(0, 10).join(', '), files.length > 10 ? `... (${files.length} total)` : '');
-
-  // Serve Next.js static files with priority
-  app.use(express.static(frontendOutPath, { index: false }));
-} else {
-  console.log("⚠️ Next.js static export not found at frontend/out");
-  console.log("💡 Run 'npm run build' to generate frontend");
-  console.log("📂 Current directory:", process.cwd());
-  console.log("📂 Directory contents:", fs.readdirSync(process.cwd()));
+    // Serve Next.js static files with priority
+    app.use(express.static(frontendOutPath, { index: false }));
+  } else {
+    console.log("⚠️ Next.js static export not found at frontend/out");
+  }
 }
 
 // Initialize database
@@ -136,30 +114,13 @@ if (apolloApiKey) {
  * Authentication middleware - protects routes that require login
  */
 function requireAuth(req, res, next) {
-  console.log('[AUTH] Path:', req.path);
-  console.log('[AUTH] Session:', req.session);
-  console.log('[AUTH] SessionID:', req.sessionID);
-  console.log('[AUTH] Cookies:', req.cookies);
-
   if (!req.session.employeeId) {
-    // TEMPORARY FIX: Default to 'derrick' for testing
-    console.log('[AUTH] No session, defaulting to derrick');
-    req.employeeId = 'derrick';
-    req.username = 'derrick';
-    req.isAdmin = true;
-    req.impersonating = null;
-    req.db = getDatabaseForEmployee('derrick');
-    return next();
-
-    // Original code (commented out for debugging)
-    /*
     // For API calls, return 401
     if (req.path.startsWith('/api/')) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
     // For page requests, redirect to login
     return res.redirect('/login');
-    */
   }
 
   // If admin is impersonating, use impersonated employee's database
@@ -195,53 +156,6 @@ function authenticateRelayer(req, res, next) {
   next();
 }
 
-// Registration endpoint
-app.post('/api/auth/register', async (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Username and password required' });
-  }
-
-  // Validate username (alphanumeric, underscore, dash only)
-  if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
-    return res.status(400).json({ error: 'Username can only contain letters, numbers, underscores, and dashes' });
-  }
-
-  // Validate password length
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters' });
-  }
-
-  // Use username as employee_id for self-registration
-  const result = await createUser(username, password, username, false);
-
-  if (!result.success) {
-    return res.status(400).json({ error: result.error });
-  }
-
-  // Automatically log them in after registration
-  req.session.employeeId = username;
-  req.session.username = username;
-  req.session.isAdmin = false;
-  req.session.impersonating = null;
-
-  // Explicitly save session before responding
-  req.session.save((err) => {
-    if (err) {
-      console.error('[REGISTRATION] Session save error:', err);
-      return res.status(500).json({ error: 'Failed to create session' });
-    }
-
-    res.json({
-      success: true,
-      username: username,
-      employeeId: username,
-      isAdmin: false
-    });
-  });
-});
-
 // Login endpoint
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
@@ -262,19 +176,11 @@ app.post('/api/auth/login', async (req, res) => {
   req.session.isAdmin = result.isAdmin;
   req.session.impersonating = null;
 
-  // Explicitly save session before responding
-  req.session.save((err) => {
-    if (err) {
-      console.error('[LOGIN] Session save error:', err);
-      return res.status(500).json({ error: 'Failed to create session' });
-    }
-
-    res.json({
-      success: true,
-      username: result.username,
-      employeeId: result.employeeId,
-      isAdmin: result.isAdmin
-    });
+  res.json({
+    success: true,
+    username: result.username,
+    employeeId: result.employeeId,
+    isAdmin: result.isAdmin
   });
 });
 
@@ -288,30 +194,8 @@ app.post('/api/auth/logout', (req, res) => {
   });
 });
 
-// Healthcheck endpoint - verify frontend is built and served
-app.get('/api/health', (req, res) => {
-  const frontendExists = fs.existsSync(path.join(process.cwd(), 'frontend', 'out'));
-  const indexExists = fs.existsSync(path.join(process.cwd(), 'frontend', 'out', 'index.html'));
-
-  res.json({
-    status: 'ok',
-    frontend: {
-      built: frontendExists,
-      indexHtml: indexExists,
-      path: path.join(process.cwd(), 'frontend', 'out')
-    },
-    env: process.env.NODE_ENV,
-    timestamp: new Date().toISOString()
-  });
-});
-
 // Check auth status endpoint
 app.get('/api/auth/status', (req, res) => {
-  console.log('[AUTH STATUS] Session ID:', req.sessionID);
-  console.log('[AUTH STATUS] Session data:', req.session);
-  console.log('[AUTH STATUS] Cookies:', req.cookies);
-  console.log('[AUTH STATUS] Headers:', req.headers.cookie);
-
   if (req.session.employeeId) {
     res.json({
       authenticated: true,
@@ -387,7 +271,7 @@ app.get('/api/admin/employees/:employeeId/stats', requireAuth, (req, res) => {
   const empDb = getDatabaseForEmployee(employeeId);
 
   const stats = {
-    targets: empDb.prepare("SELECT COUNT(*) as count FROM targets WHERE status = 'approved'").get(),
+    targets: empDb.prepare('SELECT COUNT(*) as count FROM targets').get(),
     contacts: empDb.prepare('SELECT COUNT(*) as count FROM contacts').get(),
     drafts: empDb.prepare('SELECT COUNT(*) as count FROM drafts').get(),
     sent: empDb.prepare("SELECT COUNT(*) as count FROM drafts WHERE status = 'sent'").get(),
@@ -414,25 +298,31 @@ process.on('SIGTERM', () => {
 // End Authentication Section
 // ============================================
 
-// Serve React UI - Note: catch-all route at end of file handles other pages
+// Serve React UI
 app.get("/", (req, res) => {
-  const nextIndexPath = path.join(process.cwd(), 'frontend', 'out', 'index.html');
+  // In production/Railway, serve Next.js static export
+  if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+    const nextIndexPath = path.join(process.cwd(), 'frontend', 'out', 'index.html');
 
-  if (fs.existsSync(nextIndexPath)) {
-    return res.sendFile(nextIndexPath);
+    if (fs.existsSync(nextIndexPath)) {
+      return res.sendFile(nextIndexPath);
+    }
+
+    // If static export not found but FRONTEND_URL is set, redirect
+    if (process.env.FRONTEND_URL) {
+      return res.redirect(process.env.FRONTEND_URL);
+    }
+
+    // No React UI available
+    return res.status(503).send('React UI not built. Please run: npm run build');
   }
 
-  // If static export not found but FRONTEND_URL is set, redirect
-  if (process.env.FRONTEND_URL) {
-    return res.redirect(process.env.FRONTEND_URL);
-  }
-
-  // No React UI available
-  return res.status(503).send('React UI not built. Please run: npm run build');
+  // In development, redirect to Next.js dev server
+  res.redirect('http://localhost:3001');
 });
 
 app.get("/api/targets/approved", requireAuth, (req, res) => {
-  const rows = req.db.prepare(`
+  const rows = req.req.db.prepare(`
     SELECT
       t.*,
       COUNT(DISTINCT CASE
@@ -458,13 +348,13 @@ app.get("/api/targets/approved", requireAuth, (req, res) => {
 
 app.post("/api/targets/:id/approve", requireAuth, (req, res) => {
   const { id } = req.params;
-  const info = req.db.prepare(`UPDATE targets SET status = 'approved', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+  const info = req.req.db.prepare(`UPDATE targets SET status = 'approved', updated_at = ? WHERE id = ?`).run(nowISO(), id);
   if (info.changes === 0) return res.status(404).json({ error: "target not found" });
   res.json({ ok: true });
 });
 
 app.get("/api/targets", requireAuth, (req, res) => {
-  const rows = req.db.prepare(`
+  const rows = req.req.db.prepare(`
     SELECT * FROM targets
     WHERE status = 'pending'
       AND is_web3 = 1
@@ -488,7 +378,7 @@ app.get("/api/targets", requireAuth, (req, res) => {
   res.json(rows);
 });
 
-app.post("/api/targets/:id/find-contacts", requireAuth, async (req, res) => {
+app.post("/api/targets/:id/find-contacts", async (req, res) => {
   try {
     const { id } = req.params;
     const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
@@ -724,7 +614,7 @@ NOT_FOUND - if you see an error or "user not found"`;
   }
 });
 
-app.post("/api/targets/:id/find-website", requireAuth, async (req, res) => {
+app.post("/api/targets/:id/find-website", async (req, res) => {
   try {
     const { id } = req.params;
     const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
@@ -776,7 +666,7 @@ Example responses:
   }
 });
 
-app.post("/api/targets/:id/find-x-handle", requireAuth, async (req, res) => {
+app.post("/api/targets/:id/find-x-handle", async (req, res) => {
   try {
     const { id } = req.params;
     const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
@@ -828,7 +718,7 @@ Example responses:
   }
 });
 
-app.post("/api/targets/research", requireAuth, async (req, res) => {
+app.post("/api/targets/research", async (req, res) => {
   try {
     const { auto_discover_x_users = false, max_users_per_team = 5 } = req.body;
 
@@ -1123,7 +1013,7 @@ Include 15-20 companies. Focus on DeFi protocols (DEXs, lending, derivatives), w
   }
 });
 
-app.post("/api/targets/import", requireAuth, (req, res) => {
+app.post("/api/targets/import", (req, res) => {
   const items = Array.isArray(req.body?.items) ? req.body.items : null;
   if (!items) return res.status(400).json({ error: "items must be an array" });
   let inserted = 0;
@@ -1153,14 +1043,14 @@ app.post("/api/targets/import", requireAuth, (req, res) => {
   res.json({ ok: true, inserted, skipped });
 });
 
-app.post("/api/targets/:id/dismiss", requireAuth, (req, res) => {
+app.post("/api/targets/:id/dismiss", (req, res) => {
   const { id } = req.params;
   const info = req.db.prepare(`UPDATE targets SET status = 'dismissed', updated_at = ? WHERE id = ?`).run(nowISO(), id);
   if (info.changes === 0) return res.status(404).json({ error: "target not found" });
   res.json({ ok: true });
 });
 
-app.patch("/api/targets/:id", requireAuth, (req, res) => {
+app.patch("/api/targets/:id", (req, res) => {
   const { id } = req.params;
   const { x_handle, website, notes, raised_usd, monthly_revenue_usd } = req.body;
 
@@ -1185,7 +1075,7 @@ app.patch("/api/targets/:id", requireAuth, (req, res) => {
   }
 });
 
-app.delete("/api/targets/:id", requireAuth, (req, res) => {
+app.delete("/api/targets/:id", (req, res) => {
   const { id } = req.params;
 
   // Get target first to find associated data
@@ -1221,7 +1111,7 @@ app.delete("/api/targets/:id", requireAuth, (req, res) => {
   }
 });
 
-app.get("/api/health/claude", requireAuth, async (req, res) => {
+app.get("/api/health/claude", async (req, res) => {
   try {
     const msg = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -1237,7 +1127,7 @@ app.get("/api/health/claude", requireAuth, async (req, res) => {
 });
 
 // Draft approval endpoint for relayer mode
-app.post("/api/drafts/:id/approve", requireAuth, (req, res) => {
+app.post("/api/drafts/:id/approve", (req, res) => {
   const { id } = req.params;
 
   try {
@@ -1261,6 +1151,24 @@ app.post("/api/drafts/:id/approve", requireAuth, (req, res) => {
     res.status(500).json({ error: "Failed to approve draft", message: e.message });
   }
 });
+
+// Relayer authentication middleware
+function authenticateRelayer(req, res, next) {
+  const relayerApiKey = process.env.RELAYER_API_KEY;
+
+  // Skip auth if no key configured (local development)
+  if (!relayerApiKey) {
+    return next();
+  }
+
+  const providedKey = req.headers['x-relayer-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
+
+  if (!providedKey || providedKey !== relayerApiKey) {
+    return res.status(401).json({ error: "Unauthorized: Invalid relayer API key" });
+  }
+
+  next();
+}
 
 // Relayer API endpoints
 app.get("/api/relayer/approved-pending", authenticateRelayer, (req, res) => {
@@ -1324,7 +1232,7 @@ app.post("/api/relayer/mark-prepared/:id", authenticateRelayer, (req, res) => {
 });
 
 app.post("/api/relayer/mark-failed/:id", authenticateRelayer, (req, res) => {
-  const { id} = req.params;
+  const { id } = req.params;
   const { error: errorMessage } = req.body;
 
   try {
@@ -1347,92 +1255,8 @@ app.post("/api/relayer/mark-failed/:id", authenticateRelayer, (req, res) => {
   }
 });
 
-// Relayer: Get pending response capture requests
-app.get("/api/relayer/capture-requests", authenticateRelayer, (req, res) => {
-  try {
-    const requests = req.db.prepare(`
-      SELECT * FROM response_capture_requests
-      WHERE status = 'pending'
-      ORDER BY created_at ASC
-      LIMIT 10
-    `).all();
-
-    res.json({ requests });
-  } catch (e) {
-    console.error("relayer/capture-requests error:", e);
-    res.status(500).json({ error: "Failed to fetch capture requests", message: e.message });
-  }
-});
-
-// Relayer: Complete a response capture request
-app.post("/api/relayer/capture-complete/:id", authenticateRelayer, (req, res) => {
-  const { id } = req.params;
-  const { captured_response, error_message } = req.body;
-
-  try {
-    const status = captured_response ? 'completed' : 'failed';
-    const info = req.db.prepare(`
-      UPDATE response_capture_requests
-      SET status = ?, captured_response = ?, error_message = ?, completed_at = ?
-      WHERE id = ?
-    `).run(status, captured_response || null, error_message || null, nowISO(), id);
-
-    if (info.changes === 0) {
-      return res.status(404).json({ error: "Request not found" });
-    }
-
-    console.log(`✅ Relayer completed capture request ${id}`);
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("relayer/capture-complete error:", e);
-    res.status(500).json({ error: "Failed to complete capture request", message: e.message });
-  }
-});
-
-// Relayer: Get pending X auth requests
-app.get("/api/relayer/x-auth-requests", authenticateRelayer, (req, res) => {
-  try {
-    const requests = req.db.prepare(`
-      SELECT * FROM x_auth_requests
-      WHERE status = 'pending'
-      ORDER BY created_at ASC
-      LIMIT 1
-    `).all();
-
-    res.json({ requests });
-  } catch (e) {
-    console.error("relayer/x-auth-requests error:", e);
-    res.status(500).json({ error: "Failed to fetch X auth requests", message: e.message });
-  }
-});
-
-// Relayer: Complete an X auth request
-app.post("/api/relayer/x-auth-complete/:id", authenticateRelayer, (req, res) => {
-  const { id } = req.params;
-  const { success, error_message } = req.body;
-
-  try {
-    const status = success ? 'completed' : 'failed';
-    const info = req.db.prepare(`
-      UPDATE x_auth_requests
-      SET status = ?, error_message = ?, completed_at = ?
-      WHERE id = ?
-    `).run(status, error_message || null, nowISO(), id);
-
-    if (info.changes === 0) {
-      return res.status(404).json({ error: "Request not found" });
-    }
-
-    console.log(`✅ Relayer completed X auth request ${id} (${status})`);
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("relayer/x-auth-complete error:", e);
-    res.status(500).json({ error: "Failed to complete X auth request", message: e.message });
-  }
-});
-
 // Get draft queue (standalone route for backward compatibility)
-app.get("/api/queue", requireAuth, (req, res) => {
+app.get("/api/queue", (req, res) => {
   const rows = req.db.prepare(
     `SELECT d.*, c.name, c.company, c.title, c.telegram_handle FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.status IN ('queued','approved') ORDER BY d.created_at ASC`
   ).all();
@@ -1462,71 +1286,7 @@ app.use("/api/drafts", requireAuth, createDraftRoutes(
 // Initialize WorkflowEngine
 const workflowEngine = new WorkflowEngine(db, anthropic, generateOutbound, nowISO, nanoid);
 
-// X Authentication endpoint (via relayer) - creates request for relayer to process
-app.post("/api/x-auth/authenticate", requireAuth, async (req, res) => {
-  try {
-    console.log(`[API] X authentication request for: ${req.employeeId}`);
-
-    // Create an X auth request in the database
-    const requestId = nanoid();
-    const now = nowISO();
-
-    req.db.prepare(`
-      INSERT INTO x_auth_requests (id, status, created_at)
-      VALUES (?, 'pending', ?)
-    `).run(requestId, now);
-
-    console.log(`[API] Created X auth request ${requestId}, waiting for relayer...`);
-
-    // Poll for completion (wait up to 2 minutes for user to complete login)
-    const maxWaitTime = 120000; // 2 minutes
-    const pollInterval = 2000; // 2 seconds
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < maxWaitTime) {
-      // Check if request is completed
-      const request = req.db.prepare(`
-        SELECT * FROM x_auth_requests WHERE id = ?
-      `).get(requestId);
-
-      if (request.status === 'completed') {
-        console.log(`[API] X authentication successful for ${req.employeeId}`);
-        return res.json({ success: true, message: "X authentication successful" });
-      }
-
-      if (request.status === 'failed') {
-        console.log(`[API] X authentication failed: ${request.error_message}`);
-        return res.status(500).json({
-          success: false,
-          error: "authentication_failed",
-          message: request.error_message || "X authentication failed"
-        });
-      }
-
-      // Wait before next poll
-      await new Promise(r => setTimeout(r, pollInterval));
-    }
-
-    // Timeout - mark as failed
-    req.db.prepare(`
-      UPDATE x_auth_requests
-      SET status = 'failed', error_message = 'Timeout waiting for relayer', completed_at = ?
-      WHERE id = ?
-    `).run(nowISO(), requestId);
-
-    console.log("[API] Timeout waiting for relayer to complete X authentication");
-    return res.status(408).json({
-      success: false,
-      error: "timeout",
-      message: "Timeout waiting for relayer. Make sure relayer is running on your Mac."
-    });
-  } catch (e) {
-    console.error("[API] X auth error:", e?.message || e);
-    res.status(500).json({ success: false, error: "X authentication failed", message: e?.message });
-  }
-});
-
-// X Authentication endpoint - manually trigger visible browser login (DEPRECATED - kept for backward compatibility)
+// X Authentication endpoint - manually trigger visible browser login (protected by requireAuth)
 app.post("/api/x-auth/login", requireAuth, async (req, res) => {
   try {
     console.log(`[API] Manual X authentication requested for: ${req.employeeId}`);
@@ -1547,7 +1307,7 @@ app.post("/api/x-auth/login", requireAuth, async (req, res) => {
 // Check X authentication status (protected by requireAuth)
 app.get("/api/x-auth/status", requireAuth, (req, res) => {
   // Check employee database first
-  const config = req.db.prepare("SELECT value FROM employee_config WHERE key = 'x_cookies'").get();
+  const config = req.req.db.prepare("SELECT value FROM employee_config WHERE key = 'x_cookies'").get();
   if (config) {
     try {
       const cookies = JSON.parse(config.value);
@@ -1669,16 +1429,18 @@ app.use("/api/targets", requireAuth, targetDiscoveryRouter);
   global.ALCHEMY_NODE_INFO = ALCHEMY_NODE_INFO;
 
   // Catch-all route for client-side routing (must be after all API routes)
-  app.use((req, res) => {
-    // Only handle GET requests for non-API routes
-    if (req.method === 'GET' && !req.path.startsWith('/api')) {
-      const nextIndexPath = path.join(process.cwd(), 'frontend', 'out', 'index.html');
-      if (fs.existsSync(nextIndexPath)) {
-        return res.sendFile(nextIndexPath);
+  if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+    app.use((req, res) => {
+      // Only handle GET requests for non-API routes
+      if (req.method === 'GET' && !req.path.startsWith('/api')) {
+        const nextIndexPath = path.join(process.cwd(), 'frontend', 'out', 'index.html');
+        if (fs.existsSync(nextIndexPath)) {
+          return res.sendFile(nextIndexPath);
+        }
       }
-    }
-    res.status(404).send('Page not found');
-  });
+      res.status(404).send('Page not found');
+    });
+  }
 
   const port = Number(process.env.PORT || 3000);
   app.listen(port, () => {

@@ -4,7 +4,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Home, MessageCircle, Target, CheckCircle, FileText, ShieldCheck } from 'lucide-react'
+import { Home, MessageCircle, Target, CheckCircle, FileText, ShieldCheck, Key } from 'lucide-react'
+import { api } from '@/lib/api-client'
+import { toast } from 'sonner'
 
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
@@ -18,6 +20,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const [isAdmin, setIsAdmin] = useState(false)
   const [impersonating, setImpersonating] = useState<string | null>(null)
+  const [authenticating, setAuthenticating] = useState(false)
 
   useEffect(() => {
     fetch('/api/auth/status', { credentials: 'include' })
@@ -28,6 +31,30 @@ export function Sidebar() {
       })
       .catch(() => {})
   }, [pathname])
+
+  const handleXAuth = async () => {
+    try {
+      setAuthenticating(true)
+      toast.info('Opening X login on your Mac...')
+
+      const result = await api.post<{ success: boolean, message?: string }>('/api/x-auth/authenticate', {})
+
+      if (result.success) {
+        toast.success('X authentication successful!')
+      } else {
+        toast.error(result.message || 'X authentication failed')
+      }
+    } catch (error: any) {
+      console.error('X auth error:', error)
+      if (error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+        toast.error('Timeout - make sure relayer is running on your Mac')
+      } else {
+        toast.error('X authentication failed')
+      }
+    } finally {
+      setAuthenticating(false)
+    }
+  }
 
   return (
     <aside className="w-56 bg-card border-r flex flex-col py-8 px-4">
@@ -79,6 +106,19 @@ export function Sidebar() {
           </>
         )}
       </nav>
+
+      <div className="mt-auto pt-4 border-t">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleXAuth}
+          disabled={authenticating}
+          className="w-full justify-start gap-3 text-xs"
+        >
+          <Key className="h-3 w-3" />
+          <span>{authenticating ? 'Authenticating...' : 'Login to X'}</span>
+        </Button>
+      </div>
     </aside>
   )
 }
