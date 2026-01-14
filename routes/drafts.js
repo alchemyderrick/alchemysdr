@@ -183,43 +183,62 @@ export function createDraftRoutes(
 
   // Approve a draft
   router.post("/:id/approve", (req, res) => {
-    const { id } = req.params;
-    const { message_text } = req.body;
-
-    // Get draft with contact info for saving to style file
-    const row = req.db.prepare(
-      `SELECT d.*, c.name, c.company FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.id = ?`
-    ).get(id);
-    if (!row) return res.status(404).json({ error: "draft not found" });
-
-    // Update message text if provided, then approve
-    let updateQuery = `UPDATE drafts SET status = 'approved', updated_at = ?`;
-    let updateParams = [nowISO()];
-
-    if (message_text && typeof message_text === 'string') {
-      updateQuery += `, message_text = ?`;
-      updateParams.push(message_text.trim());
-    }
-
-    updateQuery += ` WHERE id = ?`;
-    updateParams.push(id);
-
-    const info = req.db.prepare(updateQuery).run(...updateParams);
-    if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
-
-    // Save approved message to SDR style file for future learning
     try {
-      const timestamp = new Date().toISOString().split("T")[0];
-      const finalMessage = message_text && typeof message_text === 'string' ? message_text.trim() : row.message_text;
-      const entry = `\n\n--- Message approved ${timestamp} ---\nContact: ${row.name} at ${row.company}\nMessage:\n${finalMessage}\n---`;
-      fs.appendFileSync(SDR_STYLE_FILE, entry, "utf8");
-      console.log(`✅ Saved approved message to ${SDR_STYLE_FILE}`);
-    } catch (e) {
-      console.error("Failed to save approved message to style file:", e.message);
-      // Don't fail the request if file append fails
-    }
+      const { id } = req.params;
+      const { message_text } = req.body;
 
-    res.json({ ok: true });
+      console.log(`[APPROVE] Draft ID: ${id}, Has message_text: ${!!message_text}`);
+      console.log(`[APPROVE] req.db exists: ${!!req.db}, req.employeeId: ${req.employeeId}`);
+
+      // Get draft with contact info for saving to style file
+      const row = req.db.prepare(
+        `SELECT d.*, c.name, c.company FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.id = ?`
+      ).get(id);
+      if (!row) {
+        console.error(`[APPROVE] Draft not found: ${id}`);
+        return res.status(404).json({ error: "draft not found" });
+      }
+
+      // Update message text if provided, then approve
+      let updateQuery = `UPDATE drafts SET status = 'approved', updated_at = ?`;
+      let updateParams = [nowISO()];
+
+      if (message_text && typeof message_text === 'string') {
+        updateQuery += `, message_text = ?`;
+        updateParams.push(message_text.trim());
+        console.log(`[APPROVE] Updating message text`);
+      }
+
+      updateQuery += ` WHERE id = ?`;
+      updateParams.push(id);
+
+      console.log(`[APPROVE] Executing SQL: ${updateQuery}`);
+      const info = req.db.prepare(updateQuery).run(...updateParams);
+      console.log(`[APPROVE] SQL result: ${info.changes} rows changed`);
+
+      if (info.changes === 0) {
+        console.error(`[APPROVE] No rows updated for draft: ${id}`);
+        return res.status(404).json({ error: "draft not found" });
+      }
+
+      // Save approved message to SDR style file for future learning
+      try {
+        const timestamp = new Date().toISOString().split("T")[0];
+        const finalMessage = message_text && typeof message_text === 'string' ? message_text.trim() : row.message_text;
+        const entry = `\n\n--- Message approved ${timestamp} ---\nContact: ${row.name} at ${row.company}\nMessage:\n${finalMessage}\n---`;
+        fs.appendFileSync(SDR_STYLE_FILE, entry, "utf8");
+        console.log(`✅ Saved approved message to ${SDR_STYLE_FILE}`);
+      } catch (e) {
+        console.error("Failed to save approved message to style file:", e.message);
+        // Don't fail the request if file append fails
+      }
+
+      console.log(`[APPROVE] Success! Returning ok:true`);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error(`[APPROVE] ERROR:`, error);
+      return res.status(500).json({ error: "failed to approve draft", message: error.message });
+    }
   });
 
   // Update draft message
