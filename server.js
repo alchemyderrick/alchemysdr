@@ -58,6 +58,16 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
+// Request logging middleware (for debugging)
+app.use((req, res, next) => {
+  if (req.path.includes('/api/drafts')) {
+    console.log(`[REQUEST] ${req.method} ${req.path}`);
+    console.log(`[REQUEST] Body:`, req.body);
+    console.log(`[REQUEST] Session:`, req.session?.employeeId || 'NO SESSION');
+  }
+  next();
+});
+
 // Session setup for authentication
 const SessionStore = SqliteStore(session);
 app.use(session({
