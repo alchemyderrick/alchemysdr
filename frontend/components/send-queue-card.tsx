@@ -88,6 +88,9 @@ export function SendQueueCard({ refreshTrigger, onMessageSent }: SendQueueCardPr
         }
       }
 
+      // Immediately remove from local state for instant UI update
+      setDrafts(prev => prev.filter(draft => draft.id !== id))
+
       // Clear the edited message from state after sending
       setEditedMessages(prev => {
         const newState = { ...prev }
@@ -95,6 +98,7 @@ export function SendQueueCard({ refreshTrigger, onMessageSent }: SendQueueCardPr
         return newState
       })
 
+      // Reload from server to ensure consistency
       await loadDrafts()
       onMessageSent?.()
     } catch (error: any) {
