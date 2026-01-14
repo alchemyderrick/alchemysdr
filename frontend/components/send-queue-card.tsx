@@ -42,7 +42,9 @@ export function SendQueueCard({ refreshTrigger, onMessageSent }: SendQueueCardPr
     try {
       // Use /api/queue which includes both 'queued' and 'approved' statuses
       const data = await api.get<DraftWithContact[]>('/api/queue')
-      setDrafts(data)
+      // Filter to only show 'queued' drafts (approved drafts are being processed by relayer)
+      const queuedOnly = data.filter(draft => draft.status === 'queued')
+      setDrafts(queuedOnly)
     } catch (error) {
       console.error('Failed to load drafts:', error)
     } finally {
@@ -95,8 +97,10 @@ export function SendQueueCard({ refreshTrigger, onMessageSent }: SendQueueCardPr
 
       await loadDrafts()
       onMessageSent?.()
-    } catch (error) {
-      toast.error('Failed to approve draft')
+    } catch (error: any) {
+      console.error('Approve error:', error)
+      const message = error?.message || 'Failed to approve draft'
+      toast.error(`Failed to approve draft: ${message}`)
     } finally {
       setActionLoading(null)
     }

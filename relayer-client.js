@@ -7,7 +7,21 @@ import fs from "fs";
 // Configuration from environment
 const RENDER_URL = process.env.RENDER_URL || "http://localhost:3000";
 const RELAYER_API_KEY = process.env.RELAYER_API_KEY || "";
+const EMPLOYEE_ID = process.env.EMPLOYEE_ID;
 const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 10000);
+
+// Validate EMPLOYEE_ID
+if (!EMPLOYEE_ID) {
+  console.error("❌ ERROR: EMPLOYEE_ID not set in .env file");
+  console.error("Please add EMPLOYEE_ID=your_name to your .env file");
+  process.exit(1);
+}
+
+if (!/^[a-zA-Z0-9_-]+$/.test(EMPLOYEE_ID)) {
+  console.error("❌ ERROR: Invalid EMPLOYEE_ID format");
+  console.error("EMPLOYEE_ID must contain only letters, numbers, underscores, and dashes");
+  process.exit(1);
+}
 
 // State management
 let busy = false;
@@ -80,25 +94,48 @@ function autoPasteTelegram() {
 
 async function prepareSend(draft) {
   try {
-    // Copy message to clipboard
-    await clipboardy.write(draft.message_text);
-    log(`📋 Copied message to clipboard for ${draft.name}`);
-
     const link = tgDeepLink(draft.telegram_handle);
     if (!link) {
       throw new Error(`No Telegram handle for ${draft.name}`);
     }
 
-    // Open TG to the conversation
+    // Open TG to the conversation first
     await open(link);
     log(`📱 Opened Telegram chat with @${draft.telegram_handle}`);
 
     // Wait for chat to load
     await new Promise((r) => setTimeout(r, 700));
 
-    // Paste into chat input and send
-    await autoPasteTelegram();
-    log(`✅ Message sent to ${draft.name} (@${draft.telegram_handle})`);
+    // Split message into paragraphs (by double line breaks)
+    const paragraphs = draft.message_text
+      .split(/\n\n+|\r\n\r\n+/)
+      .map(p => p.trim())
+      .filter(p => p.length > 0);
+
+    if (paragraphs.length === 0) {
+      throw new Error('Message has no content');
+    }
+
+    log(`📤 Sending ${paragraphs.length} paragraph(s) as separate messages`);
+
+    // Send each paragraph as a separate message
+    for (let i = 0; i < paragraphs.length; i++) {
+      const paragraph = paragraphs[i];
+      log(`  → Sending paragraph ${i + 1}/${paragraphs.length}`);
+
+      // Copy paragraph to clipboard
+      await clipboardy.write(paragraph);
+
+      // Paste into chat input and send
+      await autoPasteTelegram();
+
+      // Wait between messages (except after the last one)
+      if (i < paragraphs.length - 1) {
+        await new Promise((r) => setTimeout(r, 1500)); // 1.5 second delay between paragraphs
+      }
+    }
+
+    log(`✅ All ${paragraphs.length} message(s) sent to ${draft.name} (@${draft.telegram_handle})`);
 
     return true;
   } catch (error) {
@@ -110,6 +147,7 @@ async function prepareSend(draft) {
 async function fetchPendingDrafts() {
   const headers = {
     "Content-Type": "application/json",
+    "X-Employee-ID": EMPLOYEE_ID,
   };
 
   if (RELAYER_API_KEY) {
@@ -131,6 +169,7 @@ async function fetchPendingDrafts() {
 async function markPrepared(draftId) {
   const headers = {
     "Content-Type": "application/json",
+    "X-Employee-ID": EMPLOYEE_ID,
   };
 
   if (RELAYER_API_KEY) {
@@ -152,6 +191,7 @@ async function markPrepared(draftId) {
 async function markFailed(draftId, errorMessage) {
   const headers = {
     "Content-Type": "application/json",
+    "X-Employee-ID": EMPLOYEE_ID,
   };
 
   if (RELAYER_API_KEY) {
@@ -257,6 +297,7 @@ async function main() {
   log("=".repeat(60));
   log("🚀 SDR Console Relayer Client");
   log("=".repeat(60));
+  log(`👤 Employee: ${EMPLOYEE_ID}`);
   log(`📡 Server: ${RENDER_URL}`);
   log(`🔑 API Key: ${RELAYER_API_KEY ? "Configured" : "Not configured (local dev mode)"}`);
   log(`⏱️  Poll Interval: ${POLL_INTERVAL_MS / 1000}s`);
