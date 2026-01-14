@@ -263,8 +263,6 @@ export function createDraftRoutes(
   // Approve, open Telegram, and paste message
   router.post("/:id/approve-open-telegram", async (req, res) => {
     try {
-      if (process.platform !== "darwin")
-        return res.status(400).json({ error: "Telegram automation only on macOS" });
       const { id } = req.params;
       const overrideText =
         req.body && typeof req.body.message_text === "string" ? req.body.message_text : null;
@@ -273,7 +271,23 @@ export function createDraftRoutes(
       ).get(id);
       if (!row) return res.status(404).json({ error: "draft not found" });
 
-      // Mark as sent immediately (instead of just approved)
+      // If not on macOS (Railway/Linux), just approve it and let relayer handle sending
+      if (process.platform !== "darwin") {
+        // Update message text if provided
+        if (overrideText) {
+          req.db.prepare(`UPDATE drafts SET message_text = ?, updated_at = ? WHERE id = ?`)
+            .run(overrideText.trim(), nowISO(), id);
+        }
+
+        // Mark as approved for relayer to pick up
+        const info = req.db.prepare(`UPDATE drafts SET status = 'approved', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+        if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
+
+        console.log(`✅ Draft ${id} approved for relayer to send`);
+        return res.json({ ok: true, message: "Draft approved, relayer will process it" });
+      }
+
+      // On macOS: Mark as sent immediately (direct Telegram automation)
       const info = req.db.prepare(`UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ?`).run(nowISO(), id);
       if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
 
