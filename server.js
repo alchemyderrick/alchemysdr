@@ -39,15 +39,18 @@ import { createApolloClient } from "./lib/apollo-search.js";
 
 const app = express();
 
+// Trust Railway proxy for secure cookies
+app.set('trust proxy', 1);
+
 // Helper to strip citation tags from text (e.g., <cite index="46-3,46-4">)
 function stripCiteTags(text) {
   if (!text) return text;
   return String(text).replace(/<cite[^>]*>/gi, '').replace(/<\/cite>/gi, '').trim();
 }
 
-// CORS configuration for React frontend
+// CORS configuration - allow same origin and credentials
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+  origin: true, // Allow same-origin requests (Next.js static export served from same domain)
   credentials: true,
 }));
 
@@ -68,10 +71,13 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'change-this-in-production-please',
   resave: false,
   saveUninitialized: false,
+  proxy: true, // Trust proxy for secure cookies
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
     httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    sameSite: 'lax', // Allow same-site navigation
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: '/'
   }
 }));
 
@@ -186,11 +192,19 @@ app.post('/api/auth/register', async (req, res) => {
   req.session.isAdmin = false;
   req.session.impersonating = null;
 
-  res.json({
-    success: true,
-    username: username,
-    employeeId: username,
-    isAdmin: false
+  // Explicitly save session before responding
+  req.session.save((err) => {
+    if (err) {
+      console.error('[REGISTRATION] Session save error:', err);
+      return res.status(500).json({ error: 'Failed to create session' });
+    }
+
+    res.json({
+      success: true,
+      username: username,
+      employeeId: username,
+      isAdmin: false
+    });
   });
 });
 
@@ -214,11 +228,19 @@ app.post('/api/auth/login', async (req, res) => {
   req.session.isAdmin = result.isAdmin;
   req.session.impersonating = null;
 
-  res.json({
-    success: true,
-    username: result.username,
-    employeeId: result.employeeId,
-    isAdmin: result.isAdmin
+  // Explicitly save session before responding
+  req.session.save((err) => {
+    if (err) {
+      console.error('[LOGIN] Session save error:', err);
+      return res.status(500).json({ error: 'Failed to create session' });
+    }
+
+    res.json({
+      success: true,
+      username: result.username,
+      employeeId: result.employeeId,
+      isAdmin: result.isAdmin
+    });
   });
 });
 
