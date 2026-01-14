@@ -1451,6 +1451,55 @@ app.post("/api/relayer/x-auth-complete/:id", authenticateRelayer, (req, res) => 
   }
 });
 
+// Relayer: Get pending X discovery requests
+app.get("/api/relayer/x-discovery-requests", authenticateRelayer, (req, res) => {
+  try {
+    const requests = req.db.prepare(`
+      SELECT * FROM x_discovery_requests
+      WHERE status = 'pending'
+      ORDER BY created_at ASC
+      LIMIT 1
+    `).all();
+
+    res.json({ requests });
+  } catch (e) {
+    console.error("relayer/x-discovery-requests error:", e);
+    res.status(500).json({ error: "Failed to fetch X discovery requests", message: e.message });
+  }
+});
+
+// Relayer: Complete an X discovery request
+app.post("/api/relayer/x-discovery-complete/:id", authenticateRelayer, (req, res) => {
+  const { id } = req.params;
+  const { success, error_message, users } = req.body;
+
+  try {
+    const status = success ? 'completed' : 'failed';
+    const result_json = users ? JSON.stringify(users) : null;
+
+    const info = req.db.prepare(`
+      UPDATE x_discovery_requests
+      SET status = ?, result_json = ?, error_message = ?, completed_at = ?
+      WHERE id = ?
+    `).run(status, result_json, error_message || null, nowISO(), id);
+
+    if (info.changes === 0) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+
+    if (success && users) {
+      console.log(`✅ Relayer completed X discovery ${id}: ${users.length} users found`);
+    } else {
+      console.log(`❌ Relayer failed X discovery ${id}: ${error_message}`);
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("relayer/x-discovery-complete error:", e);
+    res.status(500).json({ error: "Failed to complete X discovery request", message: e.message });
+  }
+});
+
 // Get draft queue (standalone route for backward compatibility)
 app.get("/api/queue", requireAuth, (req, res) => {
   const rows = req.db.prepare(

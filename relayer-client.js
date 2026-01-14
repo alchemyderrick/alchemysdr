@@ -472,6 +472,90 @@ async function processXAuthRequest(request) {
   }
 }
 
+async function fetchXDiscoveryRequests() {
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Employee-ID": EMPLOYEE_ID,
+  };
+
+  if (RELAYER_API_KEY) {
+    headers["X-Relayer-API-Key"] = RELAYER_API_KEY;
+  }
+
+  const response = await fetch(`${RENDER_URL}/api/relayer/x-discovery-requests`, {
+    headers,
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.requests || [];
+}
+
+async function completeXDiscoveryRequest(requestId, success, errorMessage = null, users = null) {
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Employee-ID": EMPLOYEE_ID,
+  };
+
+  if (RELAYER_API_KEY) {
+    headers["X-Relayer-API-Key"] = RELAYER_API_KEY;
+  }
+
+  const response = await fetch(`${RENDER_URL}/api/relayer/x-discovery-complete/${requestId}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      success,
+      error_message: errorMessage,
+      users,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  return await response.json();
+}
+
+async function processXDiscoveryRequest(request) {
+  log(`\n🔍 Processing X discovery request ${request.id} for @${request.x_handle}`);
+
+  try {
+    // Import the search function from local lib/x-search.js
+    const { searchUsersWithCompanyInBio } = await import("./lib/x-search.js");
+
+    // Open employee database to load cookies
+    const dbPath = `./databases/${EMPLOYEE_ID}/data.db`;
+    const db = new Database(dbPath);
+
+    log(`🔎 Searching X for users with @${request.x_handle} in bio...`);
+    log(`   Max users: ${request.max_users}, Offset: ${request.offset}`);
+
+    // Call the search function - this will open browser on Mac
+    const users = await searchUsersWithCompanyInBio(
+      request.x_handle,
+      request.max_users,
+      request.offset,
+      db
+    );
+
+    db.close();
+
+    log(`✅ Found ${users.length} users with @${request.x_handle} in bio`);
+
+    // Send results to Railway
+    await completeXDiscoveryRequest(request.id, true, null, users);
+    log(`✅ X discovery request ${request.id} completed`);
+  } catch (error) {
+    log(`❌ Failed to complete X discovery: ${error.message}`);
+    await completeXDiscoveryRequest(request.id, false, error.message, null);
+  }
+}
+
 async function processNextDraft() {
   if (busy) return;
 
@@ -485,7 +569,16 @@ async function processNextDraft() {
       return;
     }
 
-    // Check for capture requests second (high priority)
+    // Check for X discovery requests second (high priority)
+    const xDiscoveryRequests = await fetchXDiscoveryRequests();
+    if (xDiscoveryRequests.length > 0) {
+      busy = true;
+      await processXDiscoveryRequest(xDiscoveryRequests[0]);
+      busy = false;
+      return;
+    }
+
+    // Check for capture requests third (high priority)
     const captureRequests = await fetchCaptureRequests();
     if (captureRequests.length > 0) {
       busy = true;
@@ -595,7 +688,7 @@ async function main() {
     log("\n❌ Initial connection failed. Will keep trying...\n");
   }
 
-  log("\n✅ Relayer started. Polling for X auth, capture requests, and approved drafts...");
+  log("\n✅ Relayer started. Polling for X auth, X discovery, capture requests, and approved drafts...");
   log("   Press Ctrl+C to stop.\n");
 
   // Start polling loop
