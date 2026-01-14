@@ -184,6 +184,7 @@ export function createDraftRoutes(
   // Approve a draft
   router.post("/:id/approve", (req, res) => {
     const { id } = req.params;
+    const { message_text } = req.body;
 
     // Get draft with contact info for saving to style file
     const row = req.db.prepare(
@@ -191,13 +192,26 @@ export function createDraftRoutes(
     ).get(id);
     if (!row) return res.status(404).json({ error: "draft not found" });
 
-    const info = req.db.prepare(`UPDATE drafts SET status = 'approved', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+    // Update message text if provided, then approve
+    let updateQuery = `UPDATE drafts SET status = 'approved', updated_at = ?`;
+    let updateParams = [nowISO()];
+
+    if (message_text && typeof message_text === 'string') {
+      updateQuery += `, message_text = ?`;
+      updateParams.push(message_text.trim());
+    }
+
+    updateQuery += ` WHERE id = ?`;
+    updateParams.push(id);
+
+    const info = req.db.prepare(updateQuery).run(...updateParams);
     if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
 
     // Save approved message to SDR style file for future learning
     try {
       const timestamp = new Date().toISOString().split("T")[0];
-      const entry = `\n\n--- Message approved ${timestamp} ---\nContact: ${row.name} at ${row.company}\nMessage:\n${row.message_text}\n---`;
+      const finalMessage = message_text && typeof message_text === 'string' ? message_text.trim() : row.message_text;
+      const entry = `\n\n--- Message approved ${timestamp} ---\nContact: ${row.name} at ${row.company}\nMessage:\n${finalMessage}\n---`;
       fs.appendFileSync(SDR_STYLE_FILE, entry, "utf8");
       console.log(`✅ Saved approved message to ${SDR_STYLE_FILE}`);
     } catch (e) {
