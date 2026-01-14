@@ -43,12 +43,13 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 WORKDIR /app
 
 # Copy package files for both root and frontend
-COPY package*.json ./
-COPY frontend/package*.json ./frontend/
+COPY package.json ./
+COPY frontend/package.json ./frontend/
 
 # Install all dependencies (including devDependencies needed for build)
-RUN npm install
-RUN cd frontend && npm install
+# Use --no-package-lock to avoid platform-specific lockfile issues
+RUN npm install --no-package-lock
+RUN cd frontend && npm install --no-package-lock
 
 # Copy application code
 COPY . .
@@ -56,8 +57,8 @@ COPY . .
 # Build frontend with production settings
 RUN NODE_ENV=production npm run build
 
-# Create data directory for persistent storage
-RUN mkdir -p /app/data
+# Create directories for persistent storage
+RUN mkdir -p /app/data /app/databases
 
 # Expose port
 EXPOSE 3000
