@@ -58,17 +58,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging middleware (for debugging)
-app.use((req, res, next) => {
-  if (req.path.includes('/api/drafts')) {
-    console.log(`[REQUEST] ${req.method} ${req.path}`);
-    console.log(`[REQUEST] Body:`, req.body);
-    console.log(`[REQUEST] Session:`, req.session?.employeeId || 'NO SESSION');
-  }
-  next();
-});
-
-// Session setup for authentication
+// Session setup for authentication (BEFORE request logging)
 const SessionStore = SqliteStore(session);
 app.use(session({
   store: new SessionStore({
@@ -90,6 +80,17 @@ app.use(session({
     path: '/'
   }
 }));
+
+// Request logging middleware (for debugging) - AFTER session middleware
+app.use((req, res, next) => {
+  if (req.path.includes('/api/drafts')) {
+    console.log(`[REQUEST] ${req.method} ${req.path}`);
+    console.log(`[REQUEST] Body:`, req.body);
+    console.log(`[REQUEST] Session:`, req.session?.employeeId || 'NO SESSION');
+    console.log(`[REQUEST] Cookies:`, req.cookies);
+  }
+  next();
+});
 
 // Serve static files from current directory
 app.use(express.static(process.cwd()));
