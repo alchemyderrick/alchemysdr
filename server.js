@@ -1425,11 +1425,22 @@ app.post("/api/relayer/x-auth-complete/:id", authenticateRelayer, (req, res) => 
 
     // If successful and cookies provided, save them to Railway database
     if (success && cookies) {
+      console.log(`[X-AUTH-UPLOAD] Received ${cookies.length} cookies from relayer for ${req.employeeId}`);
+      console.log(`[X-AUTH-UPLOAD] Sample cookie names: ${cookies.slice(0, 3).map(c => c.name).join(', ')}`);
+
       req.db.prepare(`
         INSERT OR REPLACE INTO employee_config (key, value, updated_at)
         VALUES ('x_cookies', ?, ?)
       `).run(JSON.stringify(cookies), nowISO());
+
+      // Verify it was saved
+      const saved = req.db.prepare(`
+        SELECT key, length(value) as size, updated_at FROM employee_config WHERE key = 'x_cookies'
+      `).get();
       console.log(`✅ Saved ${cookies.length} X cookies to Railway database for ${req.employeeId}`);
+      console.log(`[X-AUTH-UPLOAD] Verification: ${JSON.stringify(saved)}`);
+    } else if (success && !cookies) {
+      console.log(`⚠️ X auth marked successful but no cookies provided by relayer`);
     }
 
     console.log(`✅ Relayer completed X auth request ${id} (${status})`);
