@@ -30,8 +30,8 @@ aptPkgs = [
 
 [phases.install]
 cmds = [
-  "npm ci || npm install",
-  "cd frontend && npm ci || npm install"
+  "npm install --no-package-lock",
+  "cd frontend && npm install --no-package-lock"
 ]
 
 [phases.build]
