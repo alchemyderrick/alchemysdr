@@ -273,17 +273,21 @@ export function createDraftRoutes(
 
       // If not on macOS (Railway/Linux), just approve it and let relayer handle sending
       if (process.platform !== "darwin") {
-        // Update message text if provided
+        // Update message text if provided, clear prepared_at so relayer picks it up
         if (overrideText) {
-          req.db.prepare(`UPDATE drafts SET message_text = ?, updated_at = ? WHERE id = ?`)
+          req.db.prepare(`UPDATE drafts SET message_text = ?, prepared_at = NULL, updated_at = ? WHERE id = ?`)
             .run(overrideText.trim(), nowISO(), id);
+        } else {
+          // Just clear prepared_at
+          req.db.prepare(`UPDATE drafts SET prepared_at = NULL, updated_at = ? WHERE id = ?`)
+            .run(nowISO(), id);
         }
 
         // Mark as approved for relayer to pick up
-        const info = req.db.prepare(`UPDATE drafts SET status = 'approved', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+        const info = req.db.prepare(`UPDATE drafts SET status = 'approved', prepared_at = NULL, updated_at = ? WHERE id = ?`).run(nowISO(), id);
         if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
 
-        console.log(`✅ Draft ${id} approved for relayer to send`);
+        console.log(`✅ Draft ${id} approved for relayer to send (prepared_at cleared)`);
         return res.json({ ok: true, message: "Draft approved, relayer will process it" });
       }
 
