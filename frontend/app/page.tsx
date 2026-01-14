@@ -128,7 +128,7 @@ export default function HomePage() {
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <AddContactCard onRefresh={handleRefresh} />
-        <DiscoverXCard />
+        <DiscoverXCard onDiscoveryComplete={handleRefresh} />
         <div className="md:col-span-2">
           <SendQueueCard refreshTrigger={refreshTrigger} onMessageSent={handleMessageSent} />
         </div>

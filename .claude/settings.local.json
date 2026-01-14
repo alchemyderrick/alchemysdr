@@ -47,7 +47,11 @@
       "Bash(NODE_ENV=production node server.js)",
       "Bash(NODE_ENV=production npm run build:*)",
       "Bash(echo:*)",
-      "Bash(NODE_ENV=production npx next:*)"
+      "Bash(NODE_ENV=production npx next:*)",
+      "Bash(railway logs:*)",
+      "Bash(node scripts/migrate-x-discovery-table.js:*)",
+      "Bash(for db in databases/*/data.db)",
+      "Bash(do)"
     ]
   }
 }

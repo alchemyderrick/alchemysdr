@@ -9,7 +9,11 @@ import { api } from '@/lib/api-client'
 import { toast } from 'sonner'
 import { Search, Loader2 } from 'lucide-react'
 
-export function DiscoverXCard() {
+interface DiscoverXCardProps {
+  onDiscoveryComplete?: () => void
+}
+
+export function DiscoverXCard({ onDiscoveryComplete }: DiscoverXCardProps) {
   const [handle, setHandle] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -21,13 +25,25 @@ export function DiscoverXCard() {
 
     setLoading(true)
     try {
-      await api.post('/api/workflow/x-discovery', {
+      const result = await api.post<{ valid: number, invalid: number, drafts_generated: number }>('/api/workflow/x-discovery', {
         x_handle: handle.replace('@', ''),
         max_users: 5,
       })
 
-      toast.success('X discovery started! Check Active Outreach for results.')
+      if (result.drafts_generated > 0) {
+        toast.success(`Found ${result.valid} users with Telegram! ${result.drafts_generated} draft${result.drafts_generated > 1 ? 's' : ''} added to Send Queue.`)
+      } else if (result.valid > 0) {
+        toast.info(`Found ${result.valid} users but no drafts generated`)
+      } else {
+        toast.info('No users found with company in bio')
+      }
+
       setHandle('')
+
+      // Trigger refresh of Send Queue
+      if (onDiscoveryComplete) {
+        onDiscoveryComplete()
+      }
     } catch (error) {
       toast.error('Failed to start X discovery')
     } finally {
