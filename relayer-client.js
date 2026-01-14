@@ -403,7 +403,7 @@ async function fetchXAuthRequests() {
   return data.requests || [];
 }
 
-async function completeXAuthRequest(requestId, success, errorMessage = null) {
+async function completeXAuthRequest(requestId, success, errorMessage = null, cookies = null) {
   const headers = {
     "Content-Type": "application/json",
     "X-Employee-ID": EMPLOYEE_ID,
@@ -419,6 +419,7 @@ async function completeXAuthRequest(requestId, success, errorMessage = null) {
     body: JSON.stringify({
       success,
       error_message: errorMessage,
+      cookies,
     }),
   });
 
@@ -447,19 +448,27 @@ async function processXAuthRequest(request) {
     // Call the authenticate function which properly waits for login
     const success = await authenticate(db);
 
-    db.close();
-
     if (success) {
+      // Read the cookies that were just saved
+      const cookieRow = db.prepare("SELECT value FROM employee_config WHERE key = 'x_cookies'").get();
+      const cookies = cookieRow ? JSON.parse(cookieRow.value) : null;
+
+      db.close();
+
       log("✅ X authentication successful!");
-      log("🍪 Cookies saved - X search will now work");
-      await completeXAuthRequest(request.id, true);
+      log(`🍪 Uploading ${cookies?.length || 0} cookies to Railway...`);
+
+      // Send cookies to Railway
+      await completeXAuthRequest(request.id, true, null, cookies);
+      log("✅ Cookies uploaded - X search will now work on Railway");
       log(`✅ X authentication request ${request.id} completed`);
     } else {
+      db.close();
       throw new Error("Authentication failed - login timeout or error");
     }
   } catch (error) {
     log(`❌ Failed to complete X auth: ${error.message}`);
-    await completeXAuthRequest(request.id, false, error.message);
+    await completeXAuthRequest(request.id, false, error.message, null);
   }
 }
 

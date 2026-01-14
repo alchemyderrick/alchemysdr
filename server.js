@@ -1406,10 +1406,10 @@ app.get("/api/relayer/x-auth-requests", authenticateRelayer, (req, res) => {
   }
 });
 
-// Relayer: Complete an X auth request
+// Relayer: Complete an X auth request (includes uploading cookies)
 app.post("/api/relayer/x-auth-complete/:id", authenticateRelayer, (req, res) => {
   const { id } = req.params;
-  const { success, error_message } = req.body;
+  const { success, error_message, cookies } = req.body;
 
   try {
     const status = success ? 'completed' : 'failed';
@@ -1421,6 +1421,15 @@ app.post("/api/relayer/x-auth-complete/:id", authenticateRelayer, (req, res) => 
 
     if (info.changes === 0) {
       return res.status(404).json({ error: "Request not found" });
+    }
+
+    // If successful and cookies provided, save them to Railway database
+    if (success && cookies) {
+      req.db.prepare(`
+        INSERT OR REPLACE INTO employee_config (key, value, updated_at)
+        VALUES ('x_cookies', ?, ?)
+      `).run(JSON.stringify(cookies), nowISO());
+      console.log(`✅ Saved ${cookies.length} X cookies to Railway database for ${req.employeeId}`);
     }
 
     console.log(`✅ Relayer completed X auth request ${id} (${status})`);
