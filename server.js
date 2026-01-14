@@ -73,7 +73,7 @@ app.use(session({
   saveUninitialized: false,
   proxy: true, // Trust proxy for secure cookies
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    secure: false, // Temporarily disable to debug Railway proxy issue
     httpOnly: true,
     sameSite: 'lax', // Allow same-site navigation
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
