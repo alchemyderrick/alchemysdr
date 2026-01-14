@@ -102,11 +102,17 @@ const frontendOutPath = path.join(process.cwd(), 'frontend', 'out');
 if (fs.existsSync(frontendOutPath)) {
   console.log("📦 Serving Next.js static export from frontend/out");
 
+  // List files to verify build
+  const files = fs.readdirSync(frontendOutPath);
+  console.log("📄 Frontend files:", files.slice(0, 10).join(', '), files.length > 10 ? `... (${files.length} total)` : '');
+
   // Serve Next.js static files with priority
   app.use(express.static(frontendOutPath, { index: false }));
 } else {
   console.log("⚠️ Next.js static export not found at frontend/out");
   console.log("💡 Run 'npm run build' to generate frontend");
+  console.log("📂 Current directory:", process.cwd());
+  console.log("📂 Directory contents:", fs.readdirSync(process.cwd()));
 }
 
 // Initialize database
@@ -262,6 +268,23 @@ app.post('/api/auth/logout', (req, res) => {
       return res.status(500).json({ error: 'Logout failed' });
     }
     res.json({ success: true });
+  });
+});
+
+// Healthcheck endpoint - verify frontend is built and served
+app.get('/api/health', (req, res) => {
+  const frontendExists = fs.existsSync(path.join(process.cwd(), 'frontend', 'out'));
+  const indexExists = fs.existsSync(path.join(process.cwd(), 'frontend', 'out', 'index.html'));
+
+  res.json({
+    status: 'ok',
+    frontend: {
+      built: frontendExists,
+      indexHtml: indexExists,
+      path: path.join(process.cwd(), 'frontend', 'out')
+    },
+    env: process.env.NODE_ENV,
+    timestamp: new Date().toISOString()
   });
 });
 
