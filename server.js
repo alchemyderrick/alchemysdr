@@ -36,6 +36,7 @@ import { createTargetRoutes } from "./routes/targets.js";
 import { createContactRoutes } from "./routes/contacts.js";
 import { createDraftRoutes } from "./routes/drafts.js";
 import { createApolloClient } from "./lib/apollo-search.js";
+import { parseBrowserCookies, validateCookies } from "./lib/x-auth.js";
 
 const app = express();
 
@@ -315,7 +316,8 @@ app.get('/api/auth/status', (req, res) => {
       username: req.session.username,
       employeeId: req.session.employeeId,
       isAdmin: req.session.isAdmin || false,
-      impersonating: req.session.impersonating || null
+      impersonating: req.session.impersonating || null,
+      sessionId: req.sessionID
     });
   } else {
     res.json({ authenticated: false });
@@ -1641,6 +1643,86 @@ app.get("/api/x-auth/status", requireAuth, (req, res) => {
     authenticated: false,
     message: "Not authenticated - please authenticate via X login"
   });
+});
+
+// Upload X cookies from browser (via bookmarklet)
+app.post("/api/x-auth/upload-cookies-from-browser", requireAuth, async (req, res) => {
+  try {
+    const { cookies, sessionToken } = req.body;
+
+    if (!cookies || typeof cookies !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid request - cookies string required"
+      });
+    }
+
+    // Validate session token matches current session
+    if (sessionToken && sessionToken !== req.sessionID) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid session token - please log in again"
+      });
+    }
+
+    console.log(`[X-AUTH] Received cookies from browser for employee: ${req.employeeId}`);
+
+    // Parse browser cookie string into Puppeteer format
+    let parsedCookies;
+    try {
+      parsedCookies = parseBrowserCookies(cookies);
+    } catch (err) {
+      console.error('[X-AUTH] Cookie parsing failed:', err.message);
+      return res.status(400).json({
+        success: false,
+        error: "Failed to parse cookies - invalid format"
+      });
+    }
+
+    if (parsedCookies.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "No cookies found - make sure you're logged into X"
+      });
+    }
+
+    console.log(`[X-AUTH] Parsed ${parsedCookies.length} cookies from browser`);
+
+    // Validate cookies by testing them
+    console.log('[X-AUTH] Validating cookies...');
+    const isValid = await validateCookies(parsedCookies, req.db);
+
+    if (!isValid) {
+      return res.status(400).json({
+        success: false,
+        error: "Cookies are invalid or expired - please log into X and try again"
+      });
+    }
+
+    console.log('[X-AUTH] Cookies validated successfully');
+
+    // Store cookies in employee database
+    const ts = new Date().toISOString();
+    req.db.prepare(`
+      INSERT OR REPLACE INTO employee_config (key, value, updated_at)
+      VALUES ('x_cookies', ?, ?)
+    `).run(JSON.stringify(parsedCookies), ts);
+
+    console.log(`[X-AUTH] ✅ Cookies stored in database for employee: ${req.employeeId}`);
+
+    return res.json({
+      success: true,
+      message: "X account connected successfully!",
+      cookieCount: parsedCookies.length
+    });
+
+  } catch (error) {
+    console.error('[X-AUTH] Upload cookies error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to upload cookies"
+    });
+  }
 });
 
 // Mount workflow routes (must come BEFORE other target routes, protected by requireAuth)

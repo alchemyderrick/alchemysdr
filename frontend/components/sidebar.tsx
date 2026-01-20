@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Home, MessageCircle, Target, CheckCircle, FileText, ShieldCheck, Key } from 'lucide-react'
 import { api } from '@/lib/api-client'
 import { toast } from 'sonner'
+import { XConnectModal } from '@/components/x-connect-modal'
 
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
@@ -20,7 +21,9 @@ export function Sidebar() {
   const pathname = usePathname()
   const [isAdmin, setIsAdmin] = useState(false)
   const [impersonating, setImpersonating] = useState<string | null>(null)
-  const [authenticating, setAuthenticating] = useState(false)
+  const [xConnected, setXConnected] = useState(false)
+  const [showXConnectModal, setShowXConnectModal] = useState(false)
+  const [sessionId, setSessionId] = useState<string>('')
 
   useEffect(() => {
     fetch('/api/auth/status', { credentials: 'include' })
@@ -28,31 +31,26 @@ export function Sidebar() {
       .then(data => {
         setIsAdmin(data.isAdmin || false)
         setImpersonating(data.impersonating || null)
+        setSessionId(data.sessionId || '')
+      })
+      .catch(() => {})
+
+    // Check X authentication status
+    fetch('/api/x-auth/status', { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => {
+        setXConnected(data.authenticated || false)
       })
       .catch(() => {})
   }, [pathname])
 
-  const handleXAuth = async () => {
-    try {
-      setAuthenticating(true)
-      toast.info('Opening X login on your Mac...')
-
-      const result = await api.post<{ success: boolean, message?: string }>('/api/x-auth/authenticate', {})
-
-      if (result.success) {
-        toast.success('X authentication successful!')
-      } else {
-        toast.error(result.message || 'X authentication failed')
-      }
-    } catch (error: any) {
-      console.error('X auth error:', error)
-      if (error.message?.includes('timeout') || error.message?.includes('Timeout')) {
-        toast.error('Timeout - make sure relayer is running on your Mac')
-      } else {
-        toast.error('X authentication failed')
-      }
-    } finally {
-      setAuthenticating(false)
+  const handleXConnect = () => {
+    if (xConnected) {
+      // Re-sync cookies
+      setShowXConnectModal(true)
+    } else {
+      // First time connection
+      setShowXConnectModal(true)
     }
   }
 
@@ -111,14 +109,19 @@ export function Sidebar() {
         <Button
           variant="outline"
           size="sm"
-          onClick={handleXAuth}
-          disabled={authenticating}
+          onClick={handleXConnect}
           className="w-full justify-start gap-3 text-xs"
         >
           <Key className="h-3 w-3" />
-          <span>{authenticating ? 'Authenticating...' : 'Login to X'}</span>
+          <span>{xConnected ? '✓ X Connected' : 'Connect X Account'}</span>
         </Button>
       </div>
+
+      <XConnectModal
+        open={showXConnectModal}
+        onOpenChange={setShowXConnectModal}
+        sessionId={sessionId}
+      />
     </aside>
   )
 }
