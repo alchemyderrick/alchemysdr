@@ -1,9 +1,10 @@
 # Nixpacks configuration for Railway
 
 [phases.setup]
-# Node.js 20 + system libraries for Puppeteer's bundled Chromium
+# Node.js 20 + Chromium
 nixPkgs = [
-  "nodejs_20"
+  "nodejs_20",
+  "chromium"
 ]
 
 # System dependencies required by Puppeteer's bundled Chromium
@@ -49,7 +50,7 @@ aptPkgs = [
 
 [phases.install]
 cmds = [
-  "npm install --no-package-lock",
+  "PUPPETEER_SKIP_DOWNLOAD=true npm install --no-package-lock",
   "cd frontend && npm install --no-package-lock"
 ]
 
@@ -60,5 +61,7 @@ cmds = ["NODE_ENV=production npm run build"]
 cmd = "npm start"
 
 [variables]
-# Let Puppeteer download its own Chromium during npm install
-# This is more reliable than using system Chromium
+# Skip Puppeteer's Chromium download - use Nix chromium instead
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
+# Tell Puppeteer where to find Chromium at runtime
+PUPPETEER_EXECUTABLE_PATH = "/nix/var/nix/profiles/default/bin/chromium"
