@@ -1084,6 +1084,7 @@ Include 15-20 companies. Focus on DeFi protocols (DEXs, lending, derivatives), w
                   x_handle: team.x_handle,
                   target_id: target.id,
                   max_users: Number(max_users_per_team) || 5,
+                  employeeDb: req.db, // Pass employee-specific database for production Railway
                 });
               }
             } catch (error) {
@@ -1650,7 +1651,10 @@ app.post("/api/x-auth/upload-cookies-from-browser", requireAuth, async (req, res
   try {
     const { cookies, sessionToken } = req.body;
 
+    console.log(`[X-AUTH] 📡 Bookmarklet request received from employee: ${req.employeeId}`);
+
     if (!cookies || typeof cookies !== 'string') {
+      console.error('[X-AUTH] ❌ Invalid request - no cookies string provided');
       return res.status(400).json({
         success: false,
         error: "Invalid request - cookies string required"
@@ -1659,20 +1663,21 @@ app.post("/api/x-auth/upload-cookies-from-browser", requireAuth, async (req, res
 
     // Validate session token matches current session
     if (sessionToken && sessionToken !== req.sessionID) {
+      console.error(`[X-AUTH] ❌ Session token mismatch - provided: ${sessionToken}, expected: ${req.sessionID}`);
       return res.status(401).json({
         success: false,
-        error: "Invalid session token - please log in again"
+        error: "Invalid session token - please refresh the SDR Console and try again"
       });
     }
 
-    console.log(`[X-AUTH] Received cookies from browser for employee: ${req.employeeId}`);
+    console.log(`[X-AUTH] ✓ Session validated for employee: ${req.employeeId}`);
 
     // Parse browser cookie string into Puppeteer format
     let parsedCookies;
     try {
       parsedCookies = parseBrowserCookies(cookies);
     } catch (err) {
-      console.error('[X-AUTH] Cookie parsing failed:', err.message);
+      console.error('[X-AUTH] ❌ Cookie parsing failed:', err.message);
       return res.status(400).json({
         success: false,
         error: "Failed to parse cookies - invalid format"
@@ -1680,26 +1685,28 @@ app.post("/api/x-auth/upload-cookies-from-browser", requireAuth, async (req, res
     }
 
     if (parsedCookies.length === 0) {
+      console.error('[X-AUTH] ❌ No cookies parsed from browser string');
       return res.status(400).json({
         success: false,
         error: "No cookies found - make sure you're logged into X"
       });
     }
 
-    console.log(`[X-AUTH] Parsed ${parsedCookies.length} cookies from browser`);
+    console.log(`[X-AUTH] ✓ Parsed ${parsedCookies.length} cookies from browser`);
 
     // Validate cookies by testing them
-    console.log('[X-AUTH] Validating cookies...');
+    console.log('[X-AUTH] 🔍 Validating cookies with X...');
     const isValid = await validateCookies(parsedCookies, req.db);
 
     if (!isValid) {
+      console.error('[X-AUTH] ❌ Cookie validation failed - cookies are invalid or expired');
       return res.status(400).json({
         success: false,
         error: "Cookies are invalid or expired - please log into X and try again"
       });
     }
 
-    console.log('[X-AUTH] Cookies validated successfully');
+    console.log('[X-AUTH] ✓ Cookies validated successfully with X');
 
     // Store cookies in employee database
     const ts = new Date().toISOString();
@@ -1708,7 +1715,7 @@ app.post("/api/x-auth/upload-cookies-from-browser", requireAuth, async (req, res
       VALUES ('x_cookies', ?, ?)
     `).run(JSON.stringify(parsedCookies), ts);
 
-    console.log(`[X-AUTH] ✅ Cookies stored in database for employee: ${req.employeeId}`);
+    console.log(`[X-AUTH] ✅ SUCCESS: Cookies stored in database for employee: ${req.employeeId}`);
 
     return res.json({
       success: true,
@@ -1717,10 +1724,10 @@ app.post("/api/x-auth/upload-cookies-from-browser", requireAuth, async (req, res
     });
 
   } catch (error) {
-    console.error('[X-AUTH] Upload cookies error:', error);
+    console.error('[X-AUTH] ❌ UNEXPECTED ERROR:', error);
     return res.status(500).json({
       success: false,
-      error: error.message || "Failed to upload cookies"
+      error: error.message || "Unexpected error occurred while uploading cookies"
     });
   }
 });

@@ -44,8 +44,21 @@ export function DiscoverXCard({ onDiscoveryComplete }: DiscoverXCardProps) {
       if (onDiscoveryComplete) {
         onDiscoveryComplete()
       }
-    } catch (error) {
-      toast.error('Failed to start X discovery')
+    } catch (error: any) {
+      console.error('X discovery error:', error)
+
+      // Show more specific error message
+      const errorMessage = error?.response?.data?.message || error?.message || 'Unknown error occurred'
+
+      if (errorMessage.includes('authenticate') || errorMessage.includes('cookies') || errorMessage.includes('auth')) {
+        toast.error('X authentication required', {
+          description: 'Please connect your X account using the sidebar button first'
+        })
+      } else {
+        toast.error('Failed to discover X users', {
+          description: errorMessage
+        })
+      }
     } finally {
       setLoading(false)
     }

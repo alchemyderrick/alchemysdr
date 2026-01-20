@@ -16,11 +16,12 @@ export function createWorkflowRoutes(workflowEngine) {
         return res.status(400).json({ error: "x_handle is required" });
       }
 
-      console.log(`[API] Starting X discovery for @${x_handle}`);
+      console.log(`[API] Starting X discovery for @${x_handle} (employee: ${req.employeeId})`);
 
       const result = await workflowEngine.executeXDiscovery({
         x_handle: x_handle.trim(),
         max_users: Number(max_users) || 5,
+        employeeDb: req.db, // Pass employee-specific database for production Railway
       });
 
       res.json(result);

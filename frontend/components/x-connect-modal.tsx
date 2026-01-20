@@ -21,8 +21,8 @@ export function XConnectModal({ open, onOpenChange, sessionId }: XConnectModalPr
 
   useEffect(() => {
     if (open && railwayUrl) {
-      // Generate bookmarklet code with session ID
-      const code = `javascript:(function(){const cookies=document.cookie;const sessionToken='${sessionId || ''}';const railwayUrl='${railwayUrl}';if(!window.location.hostname.includes('x.com')&&!window.location.hostname.includes('twitter.com')){alert('⚠️ Please use this bookmark on x.com (while logged in)');return}fetch(railwayUrl+'/api/x-auth/upload-cookies-from-browser',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({cookies,sessionToken})}).then(r=>r.json()).then(data=>{if(data.success){alert('✅ X account connected! You can now use X automation.')}else{alert('❌ Failed to connect: '+data.error)}}).catch(err=>alert('❌ Connection failed. Make sure you are logged into the SDR Console.'))})();`
+      // Generate bookmarklet code with session ID - improved with better error handling and console logging
+      const code = `javascript:(function(){console.log('[SDR Console] Bookmarklet clicked');const cookies=document.cookie;const sessionToken='${sessionId || ''}';const railwayUrl='${railwayUrl}';if(!window.location.hostname.includes('x.com')&&!window.location.hostname.includes('twitter.com')){alert('⚠️ Please use this bookmark on x.com (while logged in)');console.error('[SDR Console] Not on x.com');return}if(!cookies){alert('⚠️ No cookies found. Please make sure you are logged into X.');console.error('[SDR Console] No cookies found');return}console.log('[SDR Console] Sending cookies to '+railwayUrl);alert('📡 Connecting to SDR Console...');fetch(railwayUrl+'/api/x-auth/upload-cookies-from-browser',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({cookies,sessionToken})}).then(r=>{console.log('[SDR Console] Response status:',r.status);return r.json()}).then(data=>{console.log('[SDR Console] Response:',data);if(data.success){alert('✅ X account connected! You can now use X automation.\\n\\nCookies stored: '+data.cookieCount)}else{alert('❌ Failed to connect: '+data.error);console.error('[SDR Console] Error:',data.error)}}).catch(err=>{console.error('[SDR Console] Fetch failed:',err);alert('❌ Connection failed: '+err.message+'\\n\\nMake sure you are logged into the SDR Console.')})})();`
 
       setBookmarkletCode(code)
     }
@@ -129,6 +129,13 @@ export function XConnectModal({ open, onOpenChange, sessionId }: XConnectModalPr
           <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-3">
             <p className="text-sm text-blue-900 dark:text-blue-100">
               <strong>💡 Tip:</strong> This bookmark will only work when you're on x.com. It's completely safe and only sends your X cookies to this app to enable automation.
+            </p>
+          </div>
+
+          {/* Status indicator */}
+          <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md p-3">
+            <p className="text-sm text-green-900 dark:text-green-100">
+              <strong>🔄 Waiting for connection...</strong> When you click the bookmark on x.com, you'll see a notification here automatically.
             </p>
           </div>
         </div>
