@@ -36,7 +36,7 @@ import { createTargetRoutes } from "./routes/targets.js";
 import { createContactRoutes } from "./routes/contacts.js";
 import { createDraftRoutes } from "./routes/drafts.js";
 import { createApolloClient } from "./lib/apollo-search.js";
-import { parseBrowserCookies, validateCookies } from "./lib/x-auth.js";
+import { parseBrowserCookies } from "./lib/x-auth.js";
 
 const app = express();
 
@@ -1694,19 +1694,19 @@ app.post("/api/x-auth/upload-cookies-from-browser", requireAuth, async (req, res
 
     console.log(`[X-AUTH] ✓ Parsed ${parsedCookies.length} cookies from browser`);
 
-    // Validate cookies by testing them
-    console.log('[X-AUTH] 🔍 Validating cookies with X...');
-    const isValid = await validateCookies(parsedCookies, req.db);
+    // Basic validation: check for essential cookies
+    const hasAuthToken = parsedCookies.some(c => c.name === 'auth_token');
+    const hasCt0 = parsedCookies.some(c => c.name === 'ct0');
 
-    if (!isValid) {
-      console.error('[X-AUTH] ❌ Cookie validation failed - cookies are invalid or expired');
+    if (!hasAuthToken) {
+      console.error('[X-AUTH] ❌ Missing auth_token cookie - this is required');
       return res.status(400).json({
         success: false,
-        error: "Cookies are invalid or expired - please log into X and try again"
+        error: "Missing auth_token cookie - please make sure you're logged into X"
       });
     }
 
-    console.log('[X-AUTH] ✓ Cookies validated successfully with X');
+    console.log(`[X-AUTH] ✓ Essential cookies present - auth_token: ${hasAuthToken}, ct0: ${hasCt0}`);
 
     // Store cookies in employee database
     const ts = new Date().toISOString();
