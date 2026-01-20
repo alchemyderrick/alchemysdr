@@ -50,7 +50,7 @@ aptPkgs = [
 
 [phases.install]
 cmds = [
-  "PUPPETEER_SKIP_DOWNLOAD=true npm install --no-package-lock",
+  "npm install --no-package-lock",
   "cd frontend && npm install --no-package-lock"
 ]
 
@@ -61,11 +61,9 @@ cmds = ["NODE_ENV=production npm run build"]
 cmd = "npm start"
 
 [variables]
-# Skip Puppeteer's Chromium download - use Nix chromium instead
-PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
-# Tell Puppeteer where to find Chromium at runtime
-# Note: This path will be auto-detected if not found, see lib/puppeteer-manager.js
-PUPPETEER_EXECUTABLE_PATH = "/nix/var/nix/profiles/default/bin/chromium"
+# Allow Puppeteer to download its bundled Chromium as fallback
+# We'll try to use Nix chromium first, then fall back to bundled version
+# PUPPETEER_SKIP_CHROMIUM_DOWNLOAD is intentionally not set
 
 [phases.postInstall]
 # Verify Chromium is installed and log its location
