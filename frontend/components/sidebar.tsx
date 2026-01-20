@@ -26,20 +26,21 @@ export function Sidebar() {
   const [sessionId, setSessionId] = useState<string>('')
 
   // Check X authentication status
-  const checkXStatus = async () => {
+  const checkXStatus = async (showToast = true) => {
     try {
       const res = await fetch('/api/x-auth/status', { credentials: 'include' })
       const data = await res.json()
 
-      // If status changed from disconnected to connected, show success toast
-      if (!xConnected && data.authenticated) {
-        toast.success('✅ X account connected! Ready to discover users', {
-          description: `${data.cookieCount} cookies stored`,
-          duration: 5000
-        })
-      }
-
-      setXConnected(data.authenticated || false)
+      // Show success toast when status changes from disconnected to connected
+      setXConnected((prevConnected) => {
+        if (!prevConnected && data.authenticated && showToast) {
+          toast.success('✅ X account connected! Ready to discover users', {
+            description: `${data.cookieCount} cookies stored`,
+            duration: 5000
+          })
+        }
+        return data.authenticated || false
+      })
     } catch (error) {
       console.error('Error checking X status:', error)
     }
@@ -55,19 +56,23 @@ export function Sidebar() {
       })
       .catch(() => {})
 
-    // Initial X status check
-    checkXStatus()
+    // Initial X status check (no toast on initial load)
+    checkXStatus(false)
   }, [pathname])
 
   // Poll for X connection status when modal is open
   useEffect(() => {
     if (showXConnectModal && !xConnected) {
+      console.log('[Sidebar] Starting X status polling...')
+
       // Poll every 3 seconds while modal is open and not connected
       const interval = setInterval(() => {
-        checkXStatus()
+        console.log('[Sidebar] Polling X status...')
+        checkXStatus(true)
       }, 3000)
 
       return () => {
+        console.log('[Sidebar] Stopping X status polling')
         clearInterval(interval)
       }
     }

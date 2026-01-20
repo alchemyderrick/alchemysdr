@@ -46,27 +46,24 @@ export function XConnectModal({ open, onOpenChange, sessionId }: XConnectModalPr
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Important Notice */}
+          <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+            <p className="text-sm text-yellow-900 dark:text-yellow-100">
+              <strong>⚠️ Important:</strong> You must drag the button below to your bookmarks bar. DO NOT click it here - it won't work due to browser security restrictions.
+            </p>
+          </div>
+
           {/* Step 1 */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground font-bold">
                 1
               </div>
-              <h3 className="font-semibold">Drag this button to your bookmarks bar</h3>
+              <h3 className="font-semibold">Show your bookmarks bar</h3>
             </div>
             <div className="pl-8">
-              <a
-                href={bookmarkletCode}
-                className="inline-block px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md font-medium cursor-move select-none"
-                onClick={(e) => {
-                  e.preventDefault()
-                  toast.info('Drag this button to your bookmarks bar')
-                }}
-              >
-                📡 Connect SDR Console to X
-              </a>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Drag the blue button above to your browser's bookmarks bar. If you don't see your bookmarks bar, press Ctrl+Shift+B (Windows) or Cmd+Shift+B (Mac).
+              <p className="text-sm text-muted-foreground">
+                Press <kbd className="px-1.5 py-0.5 text-xs bg-muted border rounded">Ctrl+Shift+B</kbd> (Windows/Linux) or <kbd className="px-1.5 py-0.5 text-xs bg-muted border rounded">Cmd+Shift+B</kbd> (Mac) to show your bookmarks bar at the top of your browser.
               </p>
             </div>
           </div>
@@ -77,11 +74,21 @@ export function XConnectModal({ open, onOpenChange, sessionId }: XConnectModalPr
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground font-bold">
                 2
               </div>
-              <h3 className="font-semibold">Go to x.com and log in</h3>
+              <h3 className="font-semibold">Drag this button to your bookmarks bar</h3>
             </div>
             <div className="pl-8">
-              <p className="text-sm text-muted-foreground">
-                Open <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">x.com</a> in a new tab and make sure you're logged into your X account.
+              <a
+                href={bookmarkletCode}
+                className="inline-block px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md font-medium cursor-move select-none"
+                onClick={(e) => {
+                  e.preventDefault()
+                  toast.error('⚠️ Don\'t click! You must DRAG this to your bookmarks bar')
+                }}
+              >
+                📡 Connect SDR Console to X
+              </a>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Click and hold on the blue button, then drag it up to your bookmarks bar. <strong>Do not click it!</strong>
               </p>
             </div>
           </div>
@@ -92,22 +99,43 @@ export function XConnectModal({ open, onOpenChange, sessionId }: XConnectModalPr
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground font-bold">
                 3
               </div>
-              <h3 className="font-semibold">Click the bookmark</h3>
+              <h3 className="font-semibold">Go to x.com and log in</h3>
             </div>
             <div className="pl-8">
               <p className="text-sm text-muted-foreground">
-                While on x.com, click the "Connect SDR Console to X" bookmark you just added. You'll see a confirmation message when your account is connected.
+                Open <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">x.com</a> in a new tab and make sure you're logged into your X account.
+              </p>
+            </div>
+          </div>
+
+          {/* Step 4 */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground font-bold">
+                4
+              </div>
+              <h3 className="font-semibold">Click the bookmark on x.com</h3>
+            </div>
+            <div className="pl-8">
+              <p className="text-sm text-muted-foreground">
+                While on x.com, click the "📡 Connect SDR Console to X" bookmark in your bookmarks bar. You'll see alerts in the browser and a notification here when connected.
               </p>
             </div>
           </div>
 
           {/* Alternative: Copy code */}
           <div className="border-t pt-4">
-            <p className="text-sm text-muted-foreground mb-2">
-              <strong>Can't drag the bookmark?</strong> Copy the code below and create a bookmark manually:
+            <p className="text-sm font-semibold mb-2">
+              Can't drag the bookmark? Create it manually:
             </p>
+            <ol className="text-sm text-muted-foreground space-y-1 mb-3 list-decimal list-inside">
+              <li>Click the copy button below to copy the bookmarklet code</li>
+              <li>Right-click your bookmarks bar and select "Add page" or "Add bookmark"</li>
+              <li>Name it "📡 Connect SDR Console to X"</li>
+              <li>Paste the copied code as the URL</li>
+            </ol>
             <div className="relative">
-              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto max-h-32">
                 {bookmarkletCode}
               </pre>
               <Button
