@@ -568,7 +568,7 @@ export function createDraftRoutes(
     res.json({ ok: true });
   });
 
-  // Capture response from Telegram (creates request for relayer to process)
+  // Capture response from Telegram
   router.post("/capture-response", async (req, res) => {
     try {
       const { telegram_handle } = req.body;
@@ -577,60 +577,90 @@ export function createDraftRoutes(
         return res.status(400).json({ error: "telegram_handle is required" });
       }
 
-      console.log(`📸 Creating response capture request for @${telegram_handle}...`);
+      // Check if running on macOS (required for direct Telegram automation)
+      if (process.platform !== "darwin") {
+        console.log(`📸 Creating response capture request for @${telegram_handle} (non-Mac, using relayer)...`);
 
-      // Create a capture request in the database
-      const requestId = nanoid();
-      const now = nowISO();
+        // Create a capture request in the database for relayer to process
+        const requestId = nanoid();
+        const now = nowISO();
 
-      req.db.prepare(`
-        INSERT INTO response_capture_requests (id, telegram_handle, status, created_at)
-        VALUES (?, ?, 'pending', ?)
-      `).run(requestId, telegram_handle, now);
+        req.db.prepare(`
+          INSERT INTO response_capture_requests (id, telegram_handle, status, created_at)
+          VALUES (?, ?, 'pending', ?)
+        `).run(requestId, telegram_handle, now);
 
-      console.log(`✅ Created capture request ${requestId}, waiting for relayer...`);
+        console.log(`✅ Created capture request ${requestId}, waiting for relayer...`);
 
-      // Poll for completion (wait up to 30 seconds)
-      const maxWaitTime = 30000; // 30 seconds
-      const pollInterval = 1000; // 1 second
-      const startTime = Date.now();
+        // Poll for completion (wait up to 30 seconds)
+        const maxWaitTime = 30000; // 30 seconds
+        const pollInterval = 1000; // 1 second
+        const startTime = Date.now();
 
-      while (Date.now() - startTime < maxWaitTime) {
-        // Check if request is completed
-        const request = req.db.prepare(`
-          SELECT * FROM response_capture_requests WHERE id = ?
-        `).get(requestId);
+        while (Date.now() - startTime < maxWaitTime) {
+          // Check if request is completed
+          const request = req.db.prepare(`
+            SELECT * FROM response_capture_requests WHERE id = ?
+          `).get(requestId);
 
-        if (request.status === 'completed') {
-          if (request.captured_response === 'NO_RESPONSE' || !request.captured_response) {
-            console.log("❌ No response found from contact");
-            return res.status(404).json({ error: "no_response", message: "No response found from the contact" });
+          if (request.status === 'completed') {
+            if (request.captured_response === 'NO_RESPONSE' || !request.captured_response) {
+              console.log("❌ No response found from contact");
+              return res.status(404).json({ error: "no_response", message: "No response found from the contact" });
+            }
+            console.log(`✅ Response captured: "${request.captured_response.substring(0, 100)}..."`);
+            return res.json({ response: request.captured_response });
           }
-          console.log(`✅ Response captured: "${request.captured_response.substring(0, 100)}..."`);
-          return res.json({ response: request.captured_response });
+
+          if (request.status === 'failed') {
+            console.log(`❌ Capture failed: ${request.error_message}`);
+            return res.status(500).json({ error: "capture_failed", message: request.error_message || "Failed to capture response" });
+          }
+
+          // Wait before next poll
+          await new Promise(r => setTimeout(r, pollInterval));
         }
 
-        if (request.status === 'failed') {
-          console.log(`❌ Capture failed: ${request.error_message}`);
-          return res.status(500).json({ error: "capture_failed", message: request.error_message || "Failed to capture response" });
-        }
+        // Timeout - mark as failed
+        req.db.prepare(`
+          UPDATE response_capture_requests
+          SET status = 'failed', error_message = 'Timeout waiting for relayer', completed_at = ?
+          WHERE id = ?
+        `).run(nowISO(), requestId);
 
-        // Wait before next poll
-        await new Promise(r => setTimeout(r, pollInterval));
+        console.log("❌ Timeout waiting for relayer to capture response");
+        return res.status(408).json({
+          error: "timeout",
+          message: "Timeout waiting for relayer. Make sure relayer is running on your Mac."
+        });
       }
 
-      // Timeout - mark as failed
-      req.db.prepare(`
-        UPDATE response_capture_requests
-        SET status = 'failed', error_message = 'Timeout waiting for relayer', completed_at = ?
-        WHERE id = ?
-      `).run(nowISO(), requestId);
+      // On macOS: Use direct Telegram automation
+      console.log(`📸 Capturing response from Telegram for @${telegram_handle} (direct Mac automation)...`);
 
-      console.log("❌ Timeout waiting for relayer to capture response");
-      return res.status(408).json({
-        error: "timeout",
-        message: "Timeout waiting for relayer. Make sure relayer is running on your Mac."
-      });
+      // 1. Open Telegram to the contact's chat
+      openTelegramDesktopLink(telegram_handle);
+
+      // 2. Wait for Telegram to open and load the chat
+      await new Promise(r => setTimeout(r, 2000));
+
+      // 3. Capture screenshot of Telegram window
+      console.log("📷 Taking screenshot of Telegram window...");
+      const screenshotPath = await captureTelegramWindow();
+
+      // 4. Extract response using Claude Vision
+      console.log("🔍 Extracting response using Claude Vision...");
+      const extractedResponse = await extractResponseFromScreenshot(screenshotPath);
+
+      // 5. Check if no response was found
+      if (extractedResponse === "NO_RESPONSE" || extractedResponse.toUpperCase().includes("NO_RESPONSE")) {
+        console.log("❌ No response found from contact");
+        return res.status(404).json({ error: "no_response", message: "No response found from the contact" });
+      }
+
+      console.log(`✅ Extracted response: "${extractedResponse.substring(0, 100)}..."`);
+
+      res.json({ response: extractedResponse });
     } catch (e) {
       console.error("capture-response error:", e?.message || e);
       res.status(500).json({ error: "failed to capture response", message: e?.message });

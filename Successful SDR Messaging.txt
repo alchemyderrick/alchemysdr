@@ -264,3 +264,74 @@ Hey Eshan, congrats on the crushing it at OpenSea!
 
 Our Alchemy Data API's Transfers endpoint enables you to fetch historical transactions for any address in a single request. Given the real-time nature of the NFT market, I'm curious if you've explored ways to enhance OpenSea's infrastructure to provide faster, more reliable transaction data for your rs. Would you be open to a quick call to discuss how Alchemy's Cortex architecture could help optimize performance?
 ---
+
+--- Follow-up sent 2026-01-14 ---
+Contact: Eshan at Opensea
+Original message:
+Hey Eshan, just wanted to circle back on our chat about Alchemy's infrastructure capabilities. Our Cortex architecture and Data API could be a real game-changer for enhancing the OpenSea user experience. 
+
+Curious if you've had a chance to look into it further? Happy to provide a quick overview whenever you have a few minutes.
+
+Follow-up:
+Hey Eshan, no rush at all - just wanted to touch base and see if you had any other questions about how Alchemy could help optimize OpenSea's infrastructure. Our team is always here if you'd like to chat through the specifics. Let me know what works best for you!
+---
+
+--- Message sent 2026-01-15 ---
+Contact: ZERϴ Network at Zerion
+Message:
+Hey ZERϴ Network, congrats on the success over at Zerion!
+
+I noticed you're building a Layer 2 network to make on-chain more enjoyable and rewarding. As the leading blockchain infrastructure provider, Alchemy has been working closely with innovative teams like yours to help enhance the user experience through blazing-fast performance.
+
+Our new Cortex architecture, for example, delivers up to 5x lower latency across every chain we support. I'd be curious to learn more about the challenges you're facing on the infrastructure side as you scale Zerion's L2 network. Would you be open to a quick call to explore how Alchemy's multi-region redundancy and enhanced APIs could help optimize reliability and throughput for your platform?
+---
+
+--- Message sent 2026-01-15 ---
+Contact: Eshan at Uniswap
+Message:
+Hey Eshan, congrats on the success over at Uniswap!
+
+We've been working closely with leading DeFi teams like yours to help optimize their infrastructure for the highest performance. One area I'm particularly excited about is our new Cortex architecture, which has enabled up to 5x lower latency across the Ethereum network.
+
+Given the real-time nature of DEX trading, would you be open to a quick discussion on how Alchemy's multi-region redundancy and enhanced APIs could help enhance the user experience on Uniswap? I'd be happy to walk through some technical specifics.
+---
+
+--- Message sent 2026-01-15 ---
+Contact: Eshan at Alchemy
+Message:
+Hey Eshan, congrats on the success over at Alchemy!
+
+
+I noticed your team is pioneering the infrastructure that powers the Web3 ecosystem. As the leading provider of blockchain infrastructure, Alchemy has been working closely with innovators like yourselves to enhance performance, reliability, and developer experience across every chain.
+
+
+Our new Cortex architecture, for example, has enabled up to 5x lower latency while maintaining 99.99%+ uptime. I'd be curious to learn more about the scaling challenges you're facing - would you be open to a quick call to explore how Alchemy's multi-region redundancy and enhanced APIs could optimize Alchemy's infrastructure?
+---
+
+--- Follow-up sent 2026-01-15 ---
+Contact: Eshan at Alchemy
+Original message:
+Hey Eshan, congrats on the success over at Alchemy!
+
+
+I noticed your team is pioneering the infrastructure that powers the Web3 ecosystem. As the leading provider of blockchain infrastructure, Alchemy has been working closely with innovators like yourselves to enhance performance, reliability, and developer experience across every chain.
+
+
+Our new Cortex architecture, for example, has enabled up to 5x lower latency while maintaining 99.99%+ uptime. I'd be curious to learn more about the scaling challenges you're facing - would you be open to a quick call to explore how Alchemy's multi-region redundancy and enhanced APIs could optimize Alchemy's infrastructure?
+
+Follow-up:
+Hey Eshan, just wanted to follow up on our previous discussion about Alchemy's infrastructure capabilities. I'd be really curious to hear your thoughts on how we might be able to enhance Alchemy's performance and reliability as you continue scaling. Feel free to let me know if you have any specific challenges I could help address.
+---
+
+--- Follow-up sent 2026-01-20 ---
+Contact: Eshan at Uniswap
+Original message:
+Hey Eshan, congrats on the success over at Uniswap!
+
+We've been working closely with leading DeFi teams like yours to help optimize their infrastructure for the highest performance. One area I'm particularly excited about is our new Cortex architecture, which has enabled up to 5x lower latency across the Ethereum network.
+
+Given the real-time nature of DEX trading, would you be open to a quick discussion on how Alchemy's multi-region redundancy and enhanced APIs could help enhance the user experience on Uniswap? I'd be happy to walk through some technical specifics.
+
+Follow-up:
+Hey Eshan, no rush at all - just wanted to check in and see if you had any other questions about how Alchemy could help optimize Uniswap's infrastructure. Our team is always here if you'd like to discuss the technical details further. Just let me know what works best for you!
+---

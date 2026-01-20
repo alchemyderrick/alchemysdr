@@ -50,7 +50,21 @@ function stripCiteTags(text) {
 
 // CORS configuration - allow same origin and credentials
 app.use(cors({
-  origin: true, // Allow same-origin requests (Next.js static export served from same domain)
+  origin: function(origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, etc.) or from allowed origins
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://web-production-554d8.up.railway.app',
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
+
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow all origins for now (can restrict later)
+    }
+  },
   credentials: true,
 }));
 
@@ -136,30 +150,13 @@ if (apolloApiKey) {
  * Authentication middleware - protects routes that require login
  */
 function requireAuth(req, res, next) {
-  console.log('[AUTH] Path:', req.path);
-  console.log('[AUTH] Session:', req.session);
-  console.log('[AUTH] SessionID:', req.sessionID);
-  console.log('[AUTH] Cookies:', req.cookies);
-
   if (!req.session.employeeId) {
-    // TEMPORARY FIX: Default to 'derrick' for testing
-    console.log('[AUTH] No session, defaulting to derrick');
-    req.employeeId = 'derrick';
-    req.username = 'derrick';
-    req.isAdmin = true;
-    req.impersonating = null;
-    req.db = getDatabaseForEmployee('derrick');
-    return next();
-
-    // Original code (commented out for debugging)
-    /*
     // For API calls, return 401
     if (req.path.startsWith('/api/')) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
     // For page requests, redirect to login
     return res.redirect('/login');
-    */
   }
 
   // If admin is impersonating, use impersonated employee's database
@@ -1155,9 +1152,38 @@ app.post("/api/targets/import", requireAuth, (req, res) => {
 
 app.post("/api/targets/:id/dismiss", requireAuth, (req, res) => {
   const { id } = req.params;
-  const info = req.db.prepare(`UPDATE targets SET status = 'dismissed', updated_at = ? WHERE id = ?`).run(nowISO(), id);
-  if (info.changes === 0) return res.status(404).json({ error: "target not found" });
-  res.json({ ok: true });
+
+  // Get target to find company name
+  const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+  if (!target) return res.status(404).json({ error: "target not found" });
+
+  try {
+    // Delete associated drafts first (to avoid foreign key constraint)
+    const contactIds = req.db.prepare(`
+      SELECT id FROM contacts WHERE company = ?
+      UNION
+      SELECT id FROM discovered_contacts WHERE target_id = ?
+    `).all(target.team_name, id).map(r => r.id);
+
+    for (const contactId of contactIds) {
+      req.db.prepare("DELETE FROM drafts WHERE contact_id = ?").run(contactId);
+    }
+
+    // Delete discovered contacts
+    req.db.prepare("DELETE FROM discovered_contacts WHERE target_id = ?").run(id);
+
+    // Delete contacts by company name (includes X/Twitter discovery contacts)
+    req.db.prepare("DELETE FROM contacts WHERE company = ?").run(target.team_name);
+
+    // Finally dismiss the target (keep it in database but mark as dismissed)
+    req.db.prepare(`UPDATE targets SET status = 'dismissed', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+
+    console.log(`🗑️ Dismissed target ${target.team_name} and deleted all associated contacts and drafts`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Dismiss target error:", e);
+    res.status(500).json({ error: "Failed to dismiss target", message: e.message });
+  }
 });
 
 app.patch("/api/targets/:id", requireAuth, (req, res) => {
@@ -1454,7 +1480,7 @@ app.post("/api/relayer/x-auth-complete/:id", authenticateRelayer, (req, res) => 
 // Get draft queue (standalone route for backward compatibility)
 app.get("/api/queue", requireAuth, (req, res) => {
   const rows = req.db.prepare(
-    `SELECT d.*, c.name, c.company, c.title, c.telegram_handle FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.status IN ('queued','approved') ORDER BY d.created_at ASC`
+    `SELECT d.*, c.name, c.company, c.title, c.telegram_handle FROM drafts d JOIN contacts c ON c.id = d.contact_id WHERE d.status IN ('queued','approved') ORDER BY d.created_at DESC`
   ).all();
   res.json(rows.map((r) => ({ ...r, tg: tgLinks(r.telegram_handle) })));
 });
@@ -1622,7 +1648,7 @@ app.use("/api/workflow", requireAuth, createWorkflowRoutes(workflowEngine));
 
 // Note: createTargetRoutes adds routes to /api/targets/:id/discover-x-users
 // This must be registered AFTER other /api/targets routes to avoid conflicts
-const targetDiscoveryRouter = createTargetRoutes(workflowEngine, anthropic, nanoid, nowISO, qualifiesTarget, apolloClient);
+const targetDiscoveryRouter = createTargetRoutes(workflowEngine, anthropic, nanoid, nowISO, qualifiesTarget, apolloClient, generateOutbound);
 app.use("/api/targets", requireAuth, targetDiscoveryRouter);
 
 (async () => {

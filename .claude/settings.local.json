@@ -51,7 +51,12 @@
       "Bash(railway logs:*)",
       "Bash(node scripts/migrate-x-discovery-table.js:*)",
       "Bash(for db in databases/*/data.db)",
-      "Bash(do)"
+      "Bash(do)",
+      "Bash(git log:*)",
+      "Bash(./start.sh)",
+      "Bash(brew install:*)",
+      "Bash(railway login:*)",
+      "Bash(./verify-production.sh:*)"
     ]
   }
 }

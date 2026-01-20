@@ -9,6 +9,23 @@ import { Target } from '@/lib/types'
 import { toast } from 'sonner'
 import { EditTargetModal } from '@/components/edit-target-modal'
 import { ImportTargetsModal } from '@/components/import-targets-modal'
+import { ContactsModal } from '@/components/contacts-modal'
+import { AddContactToTargetModal } from '@/components/add-contact-to-target-modal'
+import { Search, Eye, UserPlus } from 'lucide-react'
+
+interface Contact {
+  id: string
+  name: string
+  title?: string
+  email?: string
+  phone?: string
+  linkedin?: string
+  telegram_handle?: string
+  x_username?: string
+  x_bio?: string
+  source?: string
+  apollo_confidence_score?: number
+}
 
 export default function TargetsPage() {
   const [targets, setTargets] = useState<Target[]>([])
@@ -16,6 +33,10 @@ export default function TargetsPage() {
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null)
   const [importModalOpen, setImportModalOpen] = useState(false)
+  const [contactsModalOpen, setContactsModalOpen] = useState(false)
+  const [viewingContacts, setViewingContacts] = useState<{ teamId: string, teamName: string, contacts: Contact[] } | null>(null)
+  const [addContactModalOpen, setAddContactModalOpen] = useState(false)
+  const [addContactTarget, setAddContactTarget] = useState<{ id: string, name: string } | null>(null)
 
   useEffect(() => {
     loadTargets()
@@ -51,6 +72,47 @@ export default function TargetsPage() {
     } catch (error) {
       toast.error('Failed to dismiss target')
     }
+  }
+
+  const handleSearchContacts = async (targetId: string, teamName: string) => {
+    try {
+      toast.info('Searching for contacts via Apollo, web, and other sources...')
+      const result = await api.post<{ contacts: any[], stored: number, drafts_generated: number, message: string }>(`/api/targets/${targetId}/all-contacts`, {})
+
+      if (result.drafts_generated > 0) {
+        toast.success(`Found ${result.contacts.length} contacts! ${result.drafts_generated} draft${result.drafts_generated > 1 ? 's' : ''} added to Send Queue.`)
+      } else if (result.stored > 0) {
+        toast.success(`Found ${result.contacts.length} contacts! ${result.stored} new contact${result.stored > 1 ? 's' : ''} added.`)
+      } else if (result.contacts.length > 0) {
+        toast.info(`Found ${result.contacts.length} contacts (already stored)`)
+      } else {
+        toast.info('No contacts found')
+      }
+
+      // Reload targets to show updated contact count
+      await loadTargets()
+    } catch (error) {
+      toast.error('Failed to search for contacts')
+    }
+  }
+
+  const handleViewContacts = async (targetId: string, teamName: string) => {
+    try {
+      const result = await api.get<{ contacts: Contact[] }>(`/api/targets/${targetId}/view-contacts`)
+      setViewingContacts({
+        teamId: targetId,
+        teamName: teamName,
+        contacts: result.contacts
+      })
+      setContactsModalOpen(true)
+    } catch (error) {
+      toast.error('Failed to load contacts')
+    }
+  }
+
+  const handleAddContact = (targetId: string, teamName: string) => {
+    setAddContactTarget({ id: targetId, name: teamName })
+    setAddContactModalOpen(true)
   }
 
   const handleResearch = async () => {
@@ -167,6 +229,34 @@ export default function TargetsPage() {
                     <Button size="sm" variant="outline" onClick={() => handleDismiss(target.id)} className="hover:bg-destructive/10 hover:border-destructive hover:text-destructive border-border/50">
                       ✕ Dismiss
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleAddContact(target.id, target.team_name)}
+                      className="border-border/50 hover:bg-success/10 hover:border-success hover:text-success"
+                      title="Add contact manually"
+                    >
+                      <UserPlus className="mr-1 h-3 w-3" />
+                      Add
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleViewContacts(target.id, target.team_name)}
+                      className="border-border/50 hover:bg-primary/10 hover:border-primary"
+                    >
+                      <Eye className="mr-1 h-3 w-3" />
+                      View
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleSearchContacts(target.id, target.team_name)}
+                      className="border-border/50 hover:bg-primary/10 hover:border-primary"
+                    >
+                      <Search className="mr-1 h-3 w-3" />
+                      Search
+                    </Button>
                     <Button size="sm" onClick={() => handleApprove(target.id)} className="bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">
                       ✓ Approve
                     </Button>
@@ -192,6 +282,35 @@ export default function TargetsPage() {
         onOpenChange={setImportModalOpen}
         onSuccess={loadTargets}
       />
+
+      {viewingContacts && (
+        <ContactsModal
+          open={contactsModalOpen}
+          onOpenChange={(open) => {
+            setContactsModalOpen(open)
+            if (!open) {
+              setViewingContacts(null)
+              loadTargets()
+            }
+          }}
+          teamName={viewingContacts.teamName}
+          teamId={viewingContacts.teamId}
+          contacts={viewingContacts.contacts}
+        />
+      )}
+
+      {addContactTarget && (
+        <AddContactToTargetModal
+          open={addContactModalOpen}
+          onOpenChange={setAddContactModalOpen}
+          targetId={addContactTarget.id}
+          targetName={addContactTarget.name}
+          onSuccess={() => {
+            loadTargets()
+            setAddContactTarget(null)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -35,10 +35,10 @@ export default function HomePage() {
       midnightEST.setHours(0, 0, 0, 0)
       const midnightLocal = new Date(midnightEST.getTime() - (localOffset + estOffset) * 60000)
 
-      // Count sent drafts since midnight EST (include both 'sent' AND 'skipped' statuses)
-      // Dismissed messages still count as sent since they were actually sent
+      // Count sent drafts since midnight EST (ONLY 'sent' status, NOT 'skipped')
+      // Dismissed messages (status='skipped') should not be counted
       const sentDraftsToday = allDrafts.filter((msg: any) => {
-        if (msg.status !== 'sent' && msg.status !== 'skipped') return false
+        if (msg.status !== 'sent') return false
         const msgDate = new Date(msg.updated_at)
         return msgDate >= midnightLocal
       }).length

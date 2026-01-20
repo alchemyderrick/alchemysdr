@@ -1,0 +1,59 @@
+================================================================================
+RAILWAY ENVIRONMENT VARIABLES CHECKLIST
+================================================================================
+
+Copy these into Railway's Variables section (Settings → Variables)
+
+🔴 REQUIRED - Your app won't work without these:
+------------------------------------------------------------
+
+ANTHROPIC_API_KEY=<your-anthropic-api-key-from-env-file>
+
+APOLLO_API_KEY=<your-apollo-api-key-from-env-file>
+
+SESSION_SECRET=<GENERATE_NEW_WITH: openssl rand -hex 32>
+
+RELAYER_API_KEY=<your-relayer-api-key-from-env-file>
+
+NODE_ENV=production
+
+PORT=3000
+
+
+🟡 RECOMMENDED - For best functionality:
+------------------------------------------------------------
+
+PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+
+
+🟢 OPTIONAL - Only if needed:
+------------------------------------------------------------
+
+FRONTEND_URL=https://your-frontend-url.railway.app
+
+
+================================================================================
+IMPORTANT NOTES:
+================================================================================
+
+1. SESSION_SECRET: Generate a NEW one for production security
+   Command: openssl rand -hex 32
+
+2. RELAYER_API_KEY: MUST match your local .env file
+
+3. ANTHROPIC_API_KEY: Copy from your local .env file
+
+4. APOLLO_API_KEY: Copy from your local .env file
+
+5. After setting variables, redeploy your Railway app
+
+================================================================================
+VERIFY DEPLOYMENT:
+================================================================================
+
+1. Check Railway logs for startup errors
+2. Test health: curl https://web-production-554d8.up.railway.app/api/health/claude
+3. Start local relayer: npm run relayer
+4. Check relayer connects: Look for "✅ Connected to server" message
+
+================================================================================

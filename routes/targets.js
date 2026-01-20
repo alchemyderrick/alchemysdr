@@ -6,7 +6,7 @@ import { searchCompanyContacts } from "../lib/contact-search.js";
  * Handles target management and discovery workflows
  * NOTE: db is now accessed via req.db (set by authentication middleware)
  */
-export function createTargetRoutes(workflowEngine, anthropic, nanoid, nowISO, qualifiesTarget, apolloClient) {
+export function createTargetRoutes(workflowEngine, anthropic, nanoid, nowISO, qualifiesTarget, apolloClient, generateOutbound) {
   const router = Router();
 
   // Target-triggered X discovery: discover users for a specific target
@@ -59,11 +59,80 @@ export function createTargetRoutes(workflowEngine, anthropic, nanoid, nowISO, qu
       console.log(`[API] Searching for all contacts at ${target.team_name}`);
 
       // Use the contact search helper
-      const result = await searchCompanyContacts(target, anthropic, db, nanoid, nowISO, apolloClient);
+      const result = await searchCompanyContacts(target, anthropic, req.db, nanoid, nowISO, apolloClient);
+
+      // Generate drafts for contacts with Telegram handles
+      let draftsGenerated = 0;
+      const now = nowISO();
+
+      for (const contact of result.contacts) {
+        // Only generate drafts for contacts with Telegram handles
+        if (contact.telegram_handle) {
+          try {
+            // Check if contact already exists in contacts table (from discovered_contacts)
+            const existingContact = req.db.prepare(`
+              SELECT id FROM contacts WHERE company = ? AND name = ?
+            `).get(target.team_name, contact.name);
+
+            let contactId;
+            if (existingContact) {
+              contactId = existingContact.id;
+              console.log(`[API] Using existing contact ${contactId} for ${contact.name}`);
+            } else {
+              // Create contact entry
+              contactId = nanoid();
+              req.db.prepare(`
+                INSERT INTO contacts (id, name, company, title, telegram_handle, notes, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+              `).run(
+                contactId,
+                contact.name,
+                target.team_name,
+                contact.title || null,
+                contact.telegram_handle,
+                `Discovered via ${contact.source}`,
+                now
+              );
+              console.log(`[API] Created contact ${contactId} for ${contact.name}`);
+            }
+
+            // Check if draft already exists for this contact
+            const existingDraft = req.db.prepare(`
+              SELECT id FROM drafts WHERE contact_id = ?
+            `).get(contactId);
+
+            if (!existingDraft) {
+              // Get the full contact record to pass to generateOutbound
+              const fullContact = req.db.prepare(`SELECT * FROM contacts WHERE id = ?`).get(contactId);
+
+              // Generate message text
+              const messageText = await generateOutbound(fullContact, false);
+
+              // Create draft
+              const draftId = nanoid();
+              req.db.prepare(`
+                INSERT INTO drafts (id, contact_id, channel, message_text, status, prepared_at, created_at, updated_at)
+                VALUES (?, ?, 'telegram', ?, 'queued', NULL, ?, ?)
+              `).run(draftId, contactId, messageText, now, now);
+
+              draftsGenerated++;
+              console.log(`[API] Generated draft ${draftId} for ${contact.name}`);
+            } else {
+              console.log(`[API] Draft already exists for ${contact.name}, skipping`);
+            }
+          } catch (draftError) {
+            console.error(`[API] Error generating draft for ${contact.name}:`, draftError.message);
+            // Continue with other contacts even if one fails
+          }
+        }
+      }
+
+      console.log(`[API] Generated ${draftsGenerated} drafts from ${result.contacts.length} contacts`);
 
       res.json({
         contacts: result.contacts,
         stored: result.stored,
+        drafts_generated: draftsGenerated,
         message: result.stored === 0 ? "All contacts already stored" : `Found ${result.contacts.length} contacts`
       });
     } catch (error) {

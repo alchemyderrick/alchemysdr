@@ -180,10 +180,10 @@ export default function FollowupsPage() {
       toast.success('Response captured!')
     } catch (error: any) {
       console.error('Capture response error:', error)
-      if (error.message?.includes('platform_not_supported') || error.message?.includes('only available on macOS')) {
-        toast.error('Response capture only works on Mac (use local version)')
-      } else if (error.message?.includes('no_response') || error.message?.includes('No response found')) {
+      if (error.message?.includes('no_response') || error.message?.includes('No response found')) {
         toast.error('No Response Found')
+      } else if (error.message?.includes('timeout')) {
+        toast.error('Timeout - Make sure relayer is running')
       } else {
         toast.error('Failed to capture response')
       }
