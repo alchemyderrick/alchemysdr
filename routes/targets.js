@@ -38,9 +38,25 @@ export function createTargetRoutes(workflowEngine, anthropic, nanoid, nowISO, qu
       res.json(result);
     } catch (error) {
       console.error("[API] Target X discovery error:", error);
-      res.status(500).json({
+
+      // Provide more specific error messages based on the error type
+      let statusCode = 500;
+      let errorMessage = error.message;
+
+      if (error.message.includes("Browser initialization failed") ||
+          error.message.includes("Browser connection lost") ||
+          error.message.includes("timed out")) {
+        statusCode = 503; // Service Unavailable
+        errorMessage = `${error.message} If this persists, Railway may be experiencing resource constraints.`;
+      } else if (error.message.includes("authentication") || error.message.includes("cookies")) {
+        statusCode = 401; // Unauthorized
+      } else if (error.message.includes("rate limit")) {
+        statusCode = 429; // Too Many Requests
+      }
+
+      res.status(statusCode).json({
         error: "Workflow failed",
-        message: error.message,
+        message: errorMessage,
       });
     }
   });
