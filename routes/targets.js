@@ -32,6 +32,7 @@ export function createTargetRoutes(workflowEngine, anthropic, nanoid, nowISO, qu
         x_handle: target.x_handle,
         target_id: id,
         max_users: Number(max_users) || 5,
+        employeeDb: req.db, // Pass employee-specific database
       });
 
       res.json(result);

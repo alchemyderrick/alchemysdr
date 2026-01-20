@@ -1808,7 +1808,7 @@ app.use("/api/targets", requireAuth, targetDiscoveryRouter);
     res.status(404).send('Page not found');
   });
 
-  const port = Number(process.env.PORT || 3000);
+  const port = Number(process.env.PORT || 3002);
   app.listen(port, () => {
     console.log(`✅ Console running at http://localhost:${port}`);
   });

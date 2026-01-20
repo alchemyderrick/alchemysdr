@@ -271,24 +271,31 @@ export function createDraftRoutes(
       ).get(id);
       if (!row) return res.status(404).json({ error: "draft not found" });
 
-      // If not on macOS (Railway/Linux), just approve it and let relayer handle sending
+      // If not on macOS (Railway/Linux), mark as sent (no Telegram automation available)
       if (process.platform !== "darwin") {
-        // Update message text if provided, clear prepared_at so relayer picks it up
+        // Update message text if provided
         if (overrideText) {
-          req.db.prepare(`UPDATE drafts SET message_text = ?, prepared_at = NULL, updated_at = ? WHERE id = ?`)
+          req.db.prepare(`UPDATE drafts SET message_text = ?, updated_at = ? WHERE id = ?`)
             .run(overrideText.trim(), nowISO(), id);
-        } else {
-          // Just clear prepared_at
-          req.db.prepare(`UPDATE drafts SET prepared_at = NULL, updated_at = ? WHERE id = ?`)
-            .run(nowISO(), id);
         }
 
-        // Mark as approved for relayer to pick up
-        const info = req.db.prepare(`UPDATE drafts SET status = 'approved', prepared_at = NULL, updated_at = ? WHERE id = ?`).run(nowISO(), id);
+        // Mark as sent (Railway has no Telegram automation, but users can manually send)
+        const info = req.db.prepare(`UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ?`).run(nowISO(), id);
         if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
 
-        console.log(`✅ Draft ${id} approved for relayer to send (prepared_at cleared)`);
-        return res.json({ ok: true, message: "Draft approved, relayer will process it" });
+        // Save to SDR style file
+        try {
+          const textToSave = overrideText || row.message_text;
+          const timestamp = new Date().toISOString().split("T")[0];
+          const entry = `\n\n--- Message approved ${timestamp} (Railway) ---\nContact: ${row.name} at ${row.company}\nMessage:\n${textToSave}\n---`;
+          fs.appendFileSync(SDR_STYLE_FILE, entry, "utf8");
+          console.log(`✅ Saved approved message to ${SDR_STYLE_FILE}`);
+        } catch (e) {
+          console.error("Failed to save message to style file:", e.message);
+        }
+
+        console.log(`✅ Draft ${id} marked as sent (Railway - manual Telegram send required)`);
+        return res.json({ ok: true, message: "Draft approved! Please manually send via Telegram." });
       }
 
       // On macOS: Mark as sent immediately (direct Telegram automation)
