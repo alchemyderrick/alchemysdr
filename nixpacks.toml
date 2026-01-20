@@ -64,4 +64,15 @@ cmd = "npm start"
 # Skip Puppeteer's Chromium download - use Nix chromium instead
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
 # Tell Puppeteer where to find Chromium at runtime
+# Note: This path will be auto-detected if not found, see lib/puppeteer-manager.js
 PUPPETEER_EXECUTABLE_PATH = "/nix/var/nix/profiles/default/bin/chromium"
+
+[phases.postInstall]
+# Verify Chromium is installed and log its location
+cmds = [
+  "echo '=== Checking for Chromium ==='",
+  "which chromium || echo 'chromium not in PATH'",
+  "which chromium-browser || echo 'chromium-browser not in PATH'",
+  "ls -la /nix/var/nix/profiles/default/bin/chromium || echo 'Chromium not at expected Nix path'",
+  "find /nix/store -name chromium -type f -executable 2>/dev/null | head -5 || echo 'No chromium found in /nix/store'"
+]
