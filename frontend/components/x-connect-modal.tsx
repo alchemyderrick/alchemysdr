@@ -98,23 +98,29 @@ export function XConnectModal({ open, onOpenChange, sessionId }: XConnectModalPr
               </div>
               Create the Bookmark
             </h3>
-            <div className="pl-8 space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Drag this button to your bookmarks bar (press Cmd+Shift+B or Ctrl+Shift+B to show it):
-              </p>
-              <a
-                href={bookmarkletCode}
-                className="inline-block px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md font-medium cursor-move select-none"
-                onClick={(e) => {
-                  e.preventDefault()
-                  toast.info('💡 Drag this button to your bookmarks bar (don\'t click it!)')
-                }}
+            <div className="pl-8 space-y-3">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold">Manual Bookmark Creation:</p>
+                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside ml-2">
+                  <li>Copy the code below</li>
+                  <li>Create a new bookmark in your browser (Cmd+D or Ctrl+D)</li>
+                  <li>Name it "Copy X Cookies"</li>
+                  <li>Paste the code in the URL/Address field</li>
+                </ol>
+              </div>
+              <Textarea
+                value={bookmarkletCode}
+                readOnly
+                className="font-mono text-xs min-h-[100px]"
+                onClick={(e) => e.currentTarget.select()}
+              />
+              <Button
+                onClick={handleCopyBookmarklet}
+                variant="outline"
+                className="w-full"
               >
-                📋 Copy X Cookies
-              </a>
-              <p className="text-xs text-muted-foreground">
-                Or <button onClick={handleCopyBookmarklet} className="text-primary hover:underline">copy the code</button> and create a bookmark manually
-              </p>
+                📋 Copy Bookmarklet Code
+              </Button>
             </div>
           </div>
 
