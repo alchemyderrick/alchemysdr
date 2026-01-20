@@ -2,9 +2,11 @@
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Copy, CheckCircle2 } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
+import { api } from '@/lib/api-client'
 
 interface XConnectModalProps {
   open: boolean
@@ -12,17 +14,24 @@ interface XConnectModalProps {
   sessionId?: string
 }
 
+interface UploadResponse {
+  success: boolean
+  error?: string
+  cookieCount?: number
+}
+
 export function XConnectModal({ open, onOpenChange, sessionId }: XConnectModalProps) {
-  const [copied, setCopied] = useState(false)
   const [bookmarkletCode, setBookmarkletCode] = useState('')
+  const [cookiesInput, setCookiesInput] = useState('')
+  const [uploading, setUploading] = useState(false)
 
   // Get the current URL for the Railway app
   const railwayUrl = typeof window !== 'undefined' ? window.location.origin : ''
 
   useEffect(() => {
     if (open && railwayUrl) {
-      // Generate bookmarklet code - uses form POST to bypass CSP restrictions
-      const code = `javascript:(function(){if(!window.location.hostname.includes('x.com')&&!window.location.hostname.includes('twitter.com')){alert('⚠️ Please use this bookmark on x.com (while logged in)');return}const cookies=document.cookie;if(!cookies){alert('⚠️ No cookies found. Please make sure you are logged into X.');return}const form=document.createElement('form');form.method='POST';form.action='${railwayUrl}/api/x-auth/upload-cookies-from-browser';form.target='_blank';const cookiesInput=document.createElement('input');cookiesInput.type='hidden';cookiesInput.name='cookies';cookiesInput.value=cookies;form.appendChild(cookiesInput);const sessionInput=document.createElement('input');sessionInput.type='hidden';sessionInput.name='sessionToken';sessionInput.value='${sessionId || ''}';form.appendChild(sessionInput);document.body.appendChild(form);form.submit();document.body.removeChild(form);alert('📡 Opening connection window...\\n\\nCheck the new tab for the result!')})();`
+      // Generate bookmarklet code - copies cookies to clipboard (bypasses CSP)
+      const code = `javascript:(function(){if(!window.location.hostname.includes('x.com')&&!window.location.hostname.includes('twitter.com')){alert('⚠️ Please use this bookmark on x.com (while logged in)');return}const cookies=document.cookie;if(!cookies){alert('⚠️ No cookies found. Please make sure you are logged into X.');return}navigator.clipboard.writeText(cookies).then(()=>{alert('✅ X cookies copied to clipboard!\\n\\nNow go back to the SDR Console and paste them into the text box.')}).catch(()=>{prompt('Copy these cookies manually:',cookies)})})();`
 
       setBookmarkletCode(code)
     }
@@ -30,140 +39,139 @@ export function XConnectModal({ open, onOpenChange, sessionId }: XConnectModalPr
 
   const handleCopyBookmarklet = () => {
     navigator.clipboard.writeText(bookmarkletCode)
-    setCopied(true)
     toast.success('Bookmarklet code copied!')
-    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleUploadCookies = async () => {
+    if (!cookiesInput.trim()) {
+      toast.error('Please paste your X cookies first')
+      return
+    }
+
+    setUploading(true)
+    try {
+      const result = await api.post<UploadResponse>('/api/x-auth/upload-cookies-from-browser', {
+        cookies: cookiesInput,
+        sessionToken: sessionId
+      })
+
+      if (result.success) {
+        toast.success(`✅ X account connected! ${result.cookieCount} cookies stored`)
+        setCookiesInput('')
+        onOpenChange(false)
+      } else {
+        toast.error(`Failed: ${result.error}`)
+      }
+    } catch (error: any) {
+      toast.error(`Connection failed: ${error?.response?.data?.error || error.message}`)
+    } finally {
+      setUploading(false)
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Connect Your X Account</DialogTitle>
           <DialogDescription>
-            Follow these steps to connect your X (Twitter) account for automation
+            Copy your X cookies and paste them below to enable automation
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Important Notice */}
-          <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
-            <p className="text-sm text-yellow-900 dark:text-yellow-100">
-              <strong>⚠️ Important:</strong> You must drag the button below to your bookmarks bar. DO NOT click it here - it won't work due to browser security restrictions.
-            </p>
+          {/* Simple Instructions */}
+          <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+            <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Quick Setup (3 steps):</h3>
+            <ol className="text-sm text-blue-900 dark:text-blue-100 space-y-2 list-decimal list-inside">
+              <li>Create the bookmark using the button below (or copy/paste manually)</li>
+              <li>Go to <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="underline font-semibold">x.com</a> and click the bookmark</li>
+              <li>Come back here and paste the cookies in the text box</li>
+            </ol>
           </div>
 
-          {/* Step 1 */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
+          {/* Step 1: Create Bookmark */}
+          <div className="space-y-3">
+            <h3 className="font-semibold flex items-center gap-2">
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground font-bold">
                 1
               </div>
-              <h3 className="font-semibold">Show your bookmarks bar</h3>
-            </div>
-            <div className="pl-8">
+              Create the Bookmark
+            </h3>
+            <div className="pl-8 space-y-2">
               <p className="text-sm text-muted-foreground">
-                Press <kbd className="px-1.5 py-0.5 text-xs bg-muted border rounded">Ctrl+Shift+B</kbd> (Windows/Linux) or <kbd className="px-1.5 py-0.5 text-xs bg-muted border rounded">Cmd+Shift+B</kbd> (Mac) to show your bookmarks bar at the top of your browser.
+                Drag this button to your bookmarks bar (press Cmd+Shift+B or Ctrl+Shift+B to show it):
               </p>
-            </div>
-          </div>
-
-          {/* Step 2 */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground font-bold">
-                2
-              </div>
-              <h3 className="font-semibold">Drag this button to your bookmarks bar</h3>
-            </div>
-            <div className="pl-8">
               <a
                 href={bookmarkletCode}
                 className="inline-block px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md font-medium cursor-move select-none"
                 onClick={(e) => {
                   e.preventDefault()
-                  toast.error('⚠️ Don\'t click! You must DRAG this to your bookmarks bar')
+                  toast.info('💡 Drag this button to your bookmarks bar (don\'t click it!)')
                 }}
               >
-                📡 Connect SDR Console to X
+                📋 Copy X Cookies
               </a>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Click and hold on the blue button, then drag it up to your bookmarks bar. <strong>Do not click it!</strong>
+              <p className="text-xs text-muted-foreground">
+                Or <button onClick={handleCopyBookmarklet} className="text-primary hover:underline">copy the code</button> and create a bookmark manually
               </p>
             </div>
           </div>
 
-          {/* Step 3 */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
+          {/* Step 2: Run on X.com */}
+          <div className="space-y-3">
+            <h3 className="font-semibold flex items-center gap-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground font-bold">
+                2
+              </div>
+              Run the Bookmark on X.com
+            </h3>
+            <div className="pl-8">
+              <p className="text-sm text-muted-foreground">
+                Go to <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-semibold">x.com</a>, make sure you're logged in, then click the bookmark. It will copy your cookies to clipboard.
+              </p>
+            </div>
+          </div>
+
+          {/* Step 3: Paste Cookies */}
+          <div className="space-y-3">
+            <h3 className="font-semibold flex items-center gap-2">
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground font-bold">
                 3
               </div>
-              <h3 className="font-semibold">Go to x.com and log in</h3>
-            </div>
-            <div className="pl-8">
-              <p className="text-sm text-muted-foreground">
-                Open <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">x.com</a> in a new tab and make sure you're logged into your X account.
-              </p>
-            </div>
-          </div>
-
-          {/* Step 4 */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground font-bold">
-                4
-              </div>
-              <h3 className="font-semibold">Click the bookmark on x.com</h3>
-            </div>
-            <div className="pl-8">
-              <p className="text-sm text-muted-foreground">
-                While on x.com, click the "📡 Connect SDR Console to X" bookmark in your bookmarks bar. You'll see alerts in the browser and a notification here when connected.
-              </p>
-            </div>
-          </div>
-
-          {/* Alternative: Copy code */}
-          <div className="border-t pt-4">
-            <p className="text-sm font-semibold mb-2">
-              Can't drag the bookmark? Create it manually:
-            </p>
-            <ol className="text-sm text-muted-foreground space-y-1 mb-3 list-decimal list-inside">
-              <li>Click the copy button below to copy the bookmarklet code</li>
-              <li>Right-click your bookmarks bar and select "Add page" or "Add bookmark"</li>
-              <li>Name it "📡 Connect SDR Console to X"</li>
-              <li>Paste the copied code as the URL</li>
-            </ol>
-            <div className="relative">
-              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto max-h-32">
-                {bookmarkletCode}
-              </pre>
+              Paste Cookies Here
+            </h3>
+            <div className="pl-8 space-y-2">
+              <Textarea
+                placeholder="Paste your X cookies here (they look like: auth_token=...; ct0=...; ...)"
+                value={cookiesInput}
+                onChange={(e) => setCookiesInput(e.target.value)}
+                className="font-mono text-xs min-h-[120px]"
+              />
               <Button
-                size="sm"
-                variant="ghost"
-                className="absolute top-2 right-2"
-                onClick={handleCopyBookmarklet}
+                onClick={handleUploadCookies}
+                disabled={uploading || !cookiesInput.trim()}
+                className="w-full"
               >
-                {copied ? (
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                {uploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Uploading...
+                  </>
                 ) : (
-                  <Copy className="h-4 w-4" />
+                  <>
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Connect X Account
+                  </>
                 )}
               </Button>
             </div>
           </div>
 
           {/* Help text */}
-          <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-3">
-            <p className="text-sm text-blue-900 dark:text-blue-100">
-              <strong>💡 Tip:</strong> This bookmark will only work when you're on x.com. It's completely safe and only sends your X cookies to this app to enable automation.
-            </p>
-          </div>
-
-          {/* Status indicator */}
-          <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md p-3">
-            <p className="text-sm text-green-900 dark:text-green-100">
-              <strong>🔄 Waiting for connection...</strong> When you click the bookmark on x.com, you'll see a notification here automatically.
+          <div className="bg-gray-50 dark:bg-gray-900 border rounded-md p-3">
+            <p className="text-xs text-muted-foreground">
+              <strong>Why this method?</strong> X.com blocks external scripts for security. By copying cookies to clipboard and pasting them here, we bypass those restrictions while keeping your data secure.
             </p>
           </div>
         </div>
