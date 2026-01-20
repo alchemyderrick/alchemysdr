@@ -38,7 +38,7 @@ cmds = [
 cmds = ["NODE_ENV=production npm run build"]
 
 [start]
-cmd = "PUPPETEER_EXECUTABLE_PATH=$(which chromium) npm start"
+cmd = "bash start.sh"
 
 [variables]
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
