@@ -76,13 +76,15 @@ export function SendQueueCard({ refreshTrigger, onMessageSent }: SendQueueCardPr
 
       // Try approve-open-telegram first (for Mac), then fallback to approve
       try {
-        await api.post(`/api/drafts/${id}/approve-open-telegram`, payload)
-        toast.success('Draft approved and Telegram opened!')
+        const response = await api.post<{ ok: boolean, message: string }>(`/api/drafts/${id}/approve-open-telegram`, payload)
+        // Show the actual message from the backend
+        toast.success(response.message || 'Draft approved and Telegram opened!')
       } catch (error: any) {
         // If it fails because not on macOS, use regular approve
         if (error.message?.includes('only on macOS')) {
-          await api.post(`/api/drafts/${id}/approve`, payload)
-          toast.success('Draft approved! Relayer will send within 10 seconds.')
+          const response = await api.post<{ ok: boolean, message: string }>(`/api/drafts/${id}/approve`, payload)
+          // Show the actual message from the backend
+          toast.success(response.message || 'Draft approved! Relayer will send within 10 seconds.')
         } else {
           throw error
         }
