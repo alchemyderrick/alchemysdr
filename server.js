@@ -1653,21 +1653,44 @@ app.post("/api/x-auth/upload-cookies-from-browser", requireAuth, async (req, res
 
     console.log(`[X-AUTH] 📡 Bookmarklet request received from employee: ${req.employeeId}`);
 
+    // Helper function to return error HTML
+    const sendError = (status, message) => {
+      return res.status(status).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>X Connection Failed</title>
+          <style>
+            body { font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: linear-gradient(135deg, #f87171 0%, #dc2626 100%); }
+            .card { background: white; padding: 3rem; border-radius: 1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; max-width: 500px; }
+            h1 { color: #dc2626; margin: 0 0 1rem 0; font-size: 2rem; }
+            p { color: #6b7280; margin: 0.5rem 0; }
+            .error { font-size: 4rem; margin-bottom: 1rem; }
+            button { background: #dc2626; color: white; border: none; padding: 0.75rem 2rem; border-radius: 0.5rem; font-size: 1rem; cursor: pointer; margin-top: 1.5rem; }
+            button:hover { background: #b91c1c; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="error">❌</div>
+            <h1>Connection Failed</h1>
+            <p>${message}</p>
+            <button onclick="window.close()">Close This Window</button>
+          </div>
+        </body>
+        </html>
+      `);
+    };
+
     if (!cookies || typeof cookies !== 'string') {
       console.error('[X-AUTH] ❌ Invalid request - no cookies string provided');
-      return res.status(400).json({
-        success: false,
-        error: "Invalid request - cookies string required"
-      });
+      return sendError(400, "Invalid request - cookies string required");
     }
 
     // Validate session token matches current session
     if (sessionToken && sessionToken !== req.sessionID) {
       console.error(`[X-AUTH] ❌ Session token mismatch - provided: ${sessionToken}, expected: ${req.sessionID}`);
-      return res.status(401).json({
-        success: false,
-        error: "Invalid session token - please refresh the SDR Console and try again"
-      });
+      return sendError(401, "Invalid session token - please refresh the SDR Console and try again");
     }
 
     console.log(`[X-AUTH] ✓ Session validated for employee: ${req.employeeId}`);
@@ -1678,18 +1701,12 @@ app.post("/api/x-auth/upload-cookies-from-browser", requireAuth, async (req, res
       parsedCookies = parseBrowserCookies(cookies);
     } catch (err) {
       console.error('[X-AUTH] ❌ Cookie parsing failed:', err.message);
-      return res.status(400).json({
-        success: false,
-        error: "Failed to parse cookies - invalid format"
-      });
+      return sendError(400, "Failed to parse cookies - invalid format");
     }
 
     if (parsedCookies.length === 0) {
       console.error('[X-AUTH] ❌ No cookies parsed from browser string');
-      return res.status(400).json({
-        success: false,
-        error: "No cookies found - make sure you're logged into X"
-      });
+      return sendError(400, "No cookies found - make sure you're logged into X");
     }
 
     console.log(`[X-AUTH] ✓ Parsed ${parsedCookies.length} cookies from browser`);
@@ -1700,10 +1717,7 @@ app.post("/api/x-auth/upload-cookies-from-browser", requireAuth, async (req, res
 
     if (!isValid) {
       console.error('[X-AUTH] ❌ Cookie validation failed - cookies are invalid or expired');
-      return res.status(400).json({
-        success: false,
-        error: "Cookies are invalid or expired - please log into X and try again"
-      });
+      return sendError(400, "Cookies are invalid or expired - please log into X and try again");
     }
 
     console.log('[X-AUTH] ✓ Cookies validated successfully with X');
@@ -1717,18 +1731,68 @@ app.post("/api/x-auth/upload-cookies-from-browser", requireAuth, async (req, res
 
     console.log(`[X-AUTH] ✅ SUCCESS: Cookies stored in database for employee: ${req.employeeId}`);
 
-    return res.json({
-      success: true,
-      message: "X account connected successfully!",
-      cookieCount: parsedCookies.length
-    });
+    // Return HTML page instead of JSON (for form POST from bookmarklet)
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>X Connection Successful</title>
+        <style>
+          body { font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+          .card { background: white; padding: 3rem; border-radius: 1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; max-width: 500px; }
+          h1 { color: #10b981; margin: 0 0 1rem 0; font-size: 2rem; }
+          p { color: #6b7280; margin: 0.5rem 0; }
+          .count { font-size: 3rem; font-weight: bold; color: #667eea; margin: 1rem 0; }
+          .success { font-size: 4rem; margin-bottom: 1rem; }
+          button { background: #667eea; color: white; border: none; padding: 0.75rem 2rem; border-radius: 0.5rem; font-size: 1rem; cursor: pointer; margin-top: 1.5rem; }
+          button:hover { background: #5568d3; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="success">✅</div>
+          <h1>X Account Connected!</h1>
+          <p>Your X cookies have been successfully uploaded.</p>
+          <div class="count">${parsedCookies.length}</div>
+          <p>cookies stored</p>
+          <p style="margin-top: 1rem; font-size: 0.875rem;">You can now use X automation features in the SDR Console.</p>
+          <button onclick="window.close()">Close This Window</button>
+        </div>
+      </body>
+      </html>
+    `);
 
   } catch (error) {
     console.error('[X-AUTH] ❌ UNEXPECTED ERROR:', error);
-    return res.status(500).json({
-      success: false,
-      error: error.message || "Unexpected error occurred while uploading cookies"
-    });
+
+    // Return HTML error page
+    return res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>X Connection Failed</title>
+        <style>
+          body { font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: linear-gradient(135deg, #f87171 0%, #dc2626 100%); }
+          .card { background: white; padding: 3rem; border-radius: 1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; max-width: 500px; }
+          h1 { color: #dc2626; margin: 0 0 1rem 0; font-size: 2rem; }
+          p { color: #6b7280; margin: 0.5rem 0; }
+          .error { font-size: 4rem; margin-bottom: 1rem; }
+          code { background: #f3f4f6; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.875rem; }
+          button { background: #dc2626; color: white; border: none; padding: 0.75rem 2rem; border-radius: 0.5rem; font-size: 1rem; cursor: pointer; margin-top: 1.5rem; }
+          button:hover { background: #b91c1c; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="error">❌</div>
+          <h1>Connection Failed</h1>
+          <p>${error.message || "Unexpected error occurred"}</p>
+          <p style="margin-top: 1rem; font-size: 0.875rem;">Please try again or contact support if the issue persists.</p>
+          <button onclick="window.close()">Close This Window</button>
+        </div>
+      </body>
+      </html>
+    `);
   }
 });
 
