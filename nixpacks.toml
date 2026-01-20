@@ -4,12 +4,7 @@
 # Node.js 20 + Chromium and required libraries for Puppeteer
 nixPkgs = [
   "nodejs_20",
-  "chromium",
-  "nss",
-  "freetype",
-  "harfbuzz",
-  "ca-certificates",
-  "fontconfig"
+  "chromium"
 ]
 
 # Additional system packages for Puppeteer
@@ -38,7 +33,8 @@ cmds = [
 cmds = ["NODE_ENV=production npm run build"]
 
 [start]
-cmd = "bash start.sh"
+cmd = "npm start"
 
 [variables]
+# Don't download Chromium since we're using the Nix package
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
