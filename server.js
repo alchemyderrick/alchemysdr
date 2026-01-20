@@ -88,9 +88,9 @@ app.use(session({
   saveUninitialized: false,
   proxy: true, // Trust proxy for secure cookies
   cookie: {
-    secure: false, // Temporarily disable to debug Railway proxy issue
+    secure: process.env.NODE_ENV === 'production', // Secure cookies in production (HTTPS required)
     httpOnly: true,
-    sameSite: 'lax', // Allow same-site navigation
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for cross-site bookmarklet on Railway, 'lax' for local dev
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/'
   }
