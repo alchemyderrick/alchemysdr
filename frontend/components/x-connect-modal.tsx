@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { CheckCircle2, Loader2 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api-client'
 
@@ -21,26 +21,8 @@ interface UploadResponse {
 }
 
 export function XConnectModal({ open, onOpenChange, sessionId }: XConnectModalProps) {
-  const [bookmarkletCode, setBookmarkletCode] = useState('')
   const [cookiesInput, setCookiesInput] = useState('')
   const [uploading, setUploading] = useState(false)
-
-  // Get the current URL for the Railway app
-  const railwayUrl = typeof window !== 'undefined' ? window.location.origin : ''
-
-  useEffect(() => {
-    if (open && railwayUrl) {
-      // Generate bookmarklet code - copies cookies to clipboard (bypasses CSP)
-      const code = `javascript:(function(){if(!window.location.hostname.includes('x.com')&&!window.location.hostname.includes('twitter.com')){alert('⚠️ Please use this bookmark on x.com (while logged in)');return}const cookies=document.cookie;if(!cookies){alert('⚠️ No cookies found. Please make sure you are logged into X.');return}navigator.clipboard.writeText(cookies).then(()=>{alert('✅ X cookies copied to clipboard!\\n\\nNow go back to the SDR Console and paste them into the text box.')}).catch(()=>{prompt('Copy these cookies manually:',cookies)})})();`
-
-      setBookmarkletCode(code)
-    }
-  }, [open, railwayUrl, sessionId])
-
-  const handleCopyBookmarklet = () => {
-    navigator.clipboard.writeText(bookmarkletCode)
-    toast.success('Bookmarklet code copied!')
-  }
 
   const handleUploadCookies = async () => {
     if (!cookiesInput.trim()) {
@@ -82,68 +64,47 @@ export function XConnectModal({ open, onOpenChange, sessionId }: XConnectModalPr
         <div className="space-y-6 py-4">
           {/* Simple Instructions */}
           <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-4">
-            <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Quick Setup (3 steps):</h3>
+            <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Quick Setup (2 steps):</h3>
             <ol className="text-sm text-blue-900 dark:text-blue-100 space-y-2 list-decimal list-inside">
-              <li>Create the bookmark using the button below (or copy/paste manually)</li>
-              <li>Go to <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="underline font-semibold">x.com</a> and click the bookmark</li>
+              <li>Go to <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="underline font-semibold">x.com</a> and copy cookies from DevTools</li>
               <li>Come back here and paste the cookies in the text box</li>
             </ol>
           </div>
 
-          {/* Step 1: Create Bookmark */}
+          {/* Step 1: Copy from DevTools */}
           <div className="space-y-3">
             <h3 className="font-semibold flex items-center gap-2">
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground font-bold">
                 1
               </div>
-              Create the Bookmark
+              Copy Cookies from DevTools
             </h3>
             <div className="pl-8 space-y-3">
               <div className="space-y-2">
-                <p className="text-sm font-semibold">Manual Bookmark Creation:</p>
-                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside ml-2">
-                  <li>Copy the code below</li>
-                  <li>Create a new bookmark in your browser (Cmd+D or Ctrl+D)</li>
-                  <li>Name it "Copy X Cookies"</li>
-                  <li>Paste the code in the URL/Address field</li>
+                <p className="text-sm font-semibold">Instructions:</p>
+                <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside ml-2">
+                  <li>Go to <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-semibold">x.com</a> and make sure you're logged in</li>
+                  <li>Open DevTools (F12 or Cmd+Option+I on Mac)</li>
+                  <li>Go to the <strong>Application</strong> tab (Chrome) or <strong>Storage</strong> tab (Firefox)</li>
+                  <li>In the left sidebar, expand <strong>Cookies</strong> and click on <strong>https://x.com</strong></li>
+                  <li>Look for the <strong>auth_token</strong> cookie and copy its value</li>
+                  <li>Also copy values for: <strong>ct0</strong>, <strong>twid</strong>, and any other cookies</li>
+                  <li>Format them as: <code className="text-xs bg-gray-200 dark:bg-gray-800 px-1 py-0.5 rounded">auth_token=VALUE1; ct0=VALUE2; twid=VALUE3</code></li>
                 </ol>
               </div>
-              <Textarea
-                value={bookmarkletCode}
-                readOnly
-                className="font-mono text-xs min-h-[100px]"
-                onClick={(e) => e.currentTarget.select()}
-              />
-              <Button
-                onClick={handleCopyBookmarklet}
-                variant="outline"
-                className="w-full"
-              >
-                📋 Copy Bookmarklet Code
-              </Button>
+              <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+                <p className="text-xs text-yellow-900 dark:text-yellow-100">
+                  <strong>Tip:</strong> The auth_token is an HttpOnly cookie, so it won't show up in JavaScript. You must use DevTools to access it.
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Step 2: Run on X.com */}
+          {/* Step 2: Paste Cookies */}
           <div className="space-y-3">
             <h3 className="font-semibold flex items-center gap-2">
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground font-bold">
                 2
-              </div>
-              Run the Bookmark on X.com
-            </h3>
-            <div className="pl-8">
-              <p className="text-sm text-muted-foreground">
-                Go to <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-semibold">x.com</a>, make sure you're logged in, then click the bookmark. It will copy your cookies to clipboard.
-              </p>
-            </div>
-          </div>
-
-          {/* Step 3: Paste Cookies */}
-          <div className="space-y-3">
-            <h3 className="font-semibold flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground font-bold">
-                3
               </div>
               Paste Cookies Here
             </h3>
