@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api-client'
 import { Target } from '@/lib/types'
 import { toast } from 'sonner'
+import { useProgressToast } from '@/hooks/use-progress-toast'
 import { EditTargetModal } from '@/components/edit-target-modal'
 import { ImportTargetsModal } from '@/components/import-targets-modal'
 import { ContactsModal } from '@/components/contacts-modal'
@@ -37,6 +38,7 @@ export default function TargetsPage() {
   const [viewingContacts, setViewingContacts] = useState<{ teamId: string, teamName: string, contacts: Contact[] } | null>(null)
   const [addContactModalOpen, setAddContactModalOpen] = useState(false)
   const [addContactTarget, setAddContactTarget] = useState<{ id: string, name: string } | null>(null)
+  const progressToast = useProgressToast()
 
   useEffect(() => {
     loadTargets()
@@ -76,23 +78,23 @@ export default function TargetsPage() {
 
   const handleSearchContacts = async (targetId: string, teamName: string) => {
     try {
-      toast.info('Searching for contacts via Apollo, web, and other sources...')
+      progressToast.start('contactSearch')
       const result = await api.post<{ contacts: any[], stored: number, drafts_generated: number, message: string }>(`/api/targets/${targetId}/all-contacts`, {})
 
       if (result.drafts_generated > 0) {
-        toast.success(`Found ${result.contacts.length} contacts! ${result.drafts_generated} draft${result.drafts_generated > 1 ? 's' : ''} added to Send Queue.`)
+        progressToast.complete(`Found ${result.contacts.length} contacts! ${result.drafts_generated} draft${result.drafts_generated > 1 ? 's' : ''} added to Send Queue.`)
       } else if (result.stored > 0) {
-        toast.success(`Found ${result.contacts.length} contacts! ${result.stored} new contact${result.stored > 1 ? 's' : ''} added.`)
+        progressToast.complete(`Found ${result.contacts.length} contacts! ${result.stored} new contact${result.stored > 1 ? 's' : ''} added.`)
       } else if (result.contacts.length > 0) {
-        toast.info(`Found ${result.contacts.length} contacts (already stored)`)
+        progressToast.complete(`Found ${result.contacts.length} contacts (already stored)`)
       } else {
-        toast.info('No contacts found')
+        progressToast.complete('No contacts found')
       }
 
       // Reload targets to show updated contact count
       await loadTargets()
     } catch (error) {
-      toast.error('Failed to search for contacts')
+      progressToast.fail('Failed to search for contacts')
     }
   }
 
@@ -118,12 +120,12 @@ export default function TargetsPage() {
   const handleResearch = async () => {
     try {
       setLoading(true)
-      toast.info('Research started... This may take a minute')
+      progressToast.start('research')
       await api.post('/api/targets/research', {})
       await loadTargets()
-      toast.success('Research complete!')
+      progressToast.complete('Research complete!')
     } catch (error) {
-      toast.error('Research failed')
+      progressToast.fail('Research failed')
     } finally {
       setLoading(false)
     }

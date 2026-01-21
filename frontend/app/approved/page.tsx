@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api-client'
 import { Target } from '@/lib/types'
 import { toast } from 'sonner'
+import { useProgressToast } from '@/hooks/use-progress-toast'
 import { Plus, Search as SearchIcon, Users, X } from 'lucide-react'
 import { ContactsModal } from '@/components/contacts-modal'
 import { EditTargetModal } from '@/components/edit-target-modal'
@@ -27,6 +28,7 @@ export default function ApprovedPage() {
   const [selectedTargetForEdit, setSelectedTargetForEdit] = useState<Target | null>(null)
   const [addContactModalOpen, setAddContactModalOpen] = useState(false)
   const [addContactTarget, setAddContactTarget] = useState<{ id: string, name: string } | null>(null)
+  const progressToast = useProgressToast()
 
   useEffect(() => {
     loadTargets()
@@ -48,13 +50,13 @@ export default function ApprovedPage() {
   const handleDiscoverXUsers = async (targetId: string) => {
     setActionLoading(targetId + '-x')
     try {
-      toast.info('Discovering X users...')
+      progressToast.start('xDiscovery')
       const result = await api.post<{ valid: number; message?: string }>(`/api/targets/${targetId}/discover-x-users`, { max_users: 5 })
 
       if (result.valid === 0) {
-        toast.info(result.message || 'No users found. Try again or check X authentication.')
+        progressToast.complete(result.message || 'No users found. Try again or check X authentication.')
       } else {
-        toast.success(`Found ${result.valid} valid users! Check the queue.`)
+        progressToast.complete(`Found ${result.valid} valid users! Check the queue.`)
       }
     } catch (error: any) {
       console.error('X discovery error:', error)
@@ -64,13 +66,13 @@ export default function ApprovedPage() {
 
       // Show specific error messages based on error type
       if (errorMessage.includes('authentication') || errorMessage.includes('cookies')) {
-        toast.error('X authentication required. Please connect your X account in the sidebar.')
+        progressToast.fail('X authentication required. Please connect your X account in the sidebar.')
       } else if (errorMessage.includes('rate limit')) {
-        toast.error('X is rate limiting. Please wait a few minutes and try again.')
+        progressToast.fail('X is rate limiting. Please wait a few minutes and try again.')
       } else if (errorMessage.includes('timeout') || errorMessage.includes('Browser')) {
-        toast.error('Request timed out. Please try again in a moment.')
+        progressToast.fail('Request timed out. Please try again in a moment.')
       } else {
-        toast.error(errorMessage)
+        progressToast.fail(errorMessage)
       }
     } finally {
       setActionLoading(null)
@@ -80,15 +82,15 @@ export default function ApprovedPage() {
   const handleSearchAllContacts = async (targetId: string, teamName: string) => {
     setActionLoading(targetId + '-search')
     try {
-      toast.info('Searching for contacts...')
+      progressToast.start('contactSearch')
       const result = await api.post<{ stored: number }>(`/api/targets/${targetId}/all-contacts`, {})
       if (result.stored === 0) {
-        toast.info('All contacts found - no new contacts to add')
+        progressToast.complete('All contacts found - no new contacts to add')
       } else {
-        toast.success(`Found ${result.stored} new contacts for ${teamName}!`)
+        progressToast.complete(`Found ${result.stored} new contacts for ${teamName}!`)
       }
     } catch (error) {
-      toast.error('Failed to search contacts')
+      progressToast.fail('Failed to search contacts')
     } finally {
       setActionLoading(null)
     }
