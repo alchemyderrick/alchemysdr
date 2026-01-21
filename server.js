@@ -1462,7 +1462,7 @@ Important:
 - Keep notes concise (under 200 characters)`;
 
     const msg = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
+      model: "claude-sonnet-4-20250514",
       max_tokens: 1000,
       tools: [{
         type: "web_search_20250305",
