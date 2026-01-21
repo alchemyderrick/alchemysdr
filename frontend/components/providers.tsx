@@ -3,8 +3,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { ResearchProvider } from '@/lib/research-context'
-import { ResearchProgress } from '@/components/research-progress'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
@@ -18,10 +16,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ResearchProvider>
-        <AuthGuard>{children}</AuthGuard>
-        <ResearchProgress />
-      </ResearchProvider>
+      <AuthGuard>{children}</AuthGuard>
     </QueryClientProvider>
   )
 }
