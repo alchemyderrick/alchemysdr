@@ -4,10 +4,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Home, MessageCircle, Target, CheckCircle, FileText, ShieldCheck, Key } from 'lucide-react'
+import { Home, MessageCircle, Target, CheckCircle, FileText, ShieldCheck, Key, Download } from 'lucide-react'
 import { api } from '@/lib/api-client'
 import { toast } from 'sonner'
 import { XConnectModal } from '@/components/x-connect-modal'
+import { SetupModal } from '@/components/setup-modal'
 
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
@@ -23,7 +24,9 @@ export function Sidebar() {
   const [impersonating, setImpersonating] = useState<string | null>(null)
   const [xConnected, setXConnected] = useState(false)
   const [showXConnectModal, setShowXConnectModal] = useState(false)
+  const [showSetupModal, setShowSetupModal] = useState(false)
   const [sessionId, setSessionId] = useState<string>('')
+  const [employeeId, setEmployeeId] = useState<string>('')
 
   // Check X authentication status
   const checkXStatus = async (showToast = true) => {
@@ -53,6 +56,7 @@ export function Sidebar() {
         setIsAdmin(data.isAdmin || false)
         setImpersonating(data.impersonating || null)
         setSessionId(data.sessionId || '')
+        setEmployeeId(data.employeeId || '')
       })
       .catch(() => {})
 
@@ -139,7 +143,16 @@ export function Sidebar() {
         )}
       </nav>
 
-      <div className="mt-auto pt-4 border-t">
+      <div className="mt-auto pt-4 border-t space-y-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowSetupModal(true)}
+          className="w-full justify-start gap-3 text-xs"
+        >
+          <Download className="h-3 w-3" />
+          <span>Setup Relayer</span>
+        </Button>
         <Button
           variant="outline"
           size="sm"
@@ -150,6 +163,12 @@ export function Sidebar() {
           <span>{xConnected ? '✓ X Connected' : 'Connect X Account'}</span>
         </Button>
       </div>
+
+      <SetupModal
+        open={showSetupModal}
+        onOpenChange={setShowSetupModal}
+        employeeId={employeeId}
+      />
 
       <XConnectModal
         open={showXConnectModal}

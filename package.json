@@ -9,7 +9,8 @@
     "runner": "node runner.js",
     "build": "cd frontend && npm run build && cd ..",
     "start": "node scripts/migrate-databases.js && node server.js",
-    "relayer": "node relayer-client.js"
+    "relayer": "node relayer-client.js",
+    "create-package": "bash scripts/create-relayer-package.sh"
   },
   "keywords": [],
   "author": "",

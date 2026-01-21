@@ -389,6 +389,37 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// ============================================
+// Relayer Installer Endpoints
+// ============================================
+
+// Serve the one-click installer script
+app.get('/install.sh', (req, res) => {
+  const scriptPath = path.join(process.cwd(), 'scripts', 'install-relayer.sh');
+  if (fs.existsSync(scriptPath)) {
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', 'inline');
+    res.sendFile(scriptPath);
+  } else {
+    res.status(404).send('Install script not found');
+  }
+});
+
+// Serve the relayer package tarball
+app.get('/relayer-package.tar.gz', (req, res) => {
+  const packagePath = path.join(process.cwd(), 'relayer-package.tar.gz');
+  if (fs.existsSync(packagePath)) {
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', 'attachment; filename="relayer-package.tar.gz"');
+    res.sendFile(packagePath);
+  } else {
+    res.status(404).json({
+      error: 'Package not found',
+      message: 'Run "npm run create-package" to generate the relayer package'
+    });
+  }
+});
+
 // Check auth status endpoint
 app.get('/api/auth/status', (req, res) => {
   console.log('[AUTH STATUS] Session ID:', req.sessionID);
@@ -1992,7 +2023,9 @@ app.use("/api/targets", requireAuth, targetDiscoveryRouter);
   // Catch-all route for client-side routing (must be after all API routes)
   app.use((req, res) => {
     // Only handle GET requests for non-API routes
-    if (req.method === 'GET' && !req.path.startsWith('/api')) {
+    // Exclude installer files which have their own routes
+    if (req.method === 'GET' && !req.path.startsWith('/api') &&
+        !req.path.endsWith('.sh') && !req.path.endsWith('.tar.gz')) {
       const nextIndexPath = path.join(process.cwd(), 'frontend', 'out', 'index.html');
       if (fs.existsSync(nextIndexPath)) {
         return res.sendFile(nextIndexPath);
