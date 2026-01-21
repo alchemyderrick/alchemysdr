@@ -11,23 +11,27 @@ const RELAYER_API_KEY = process.env.RELAYER_API_KEY || "";
 const EMPLOYEE_ID = process.env.EMPLOYEE_ID;
 const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 10000);
 
-// Validate EMPLOYEE_ID
+// Validate EMPLOYEE_ID (username)
 if (!EMPLOYEE_ID) {
-  console.error("❌ ERROR: EMPLOYEE_ID not set in .env file");
-  console.error("Please add EMPLOYEE_ID=your_name to your .env file");
+  console.error("❌ ERROR: Username not configured");
+  console.error("");
+  console.error("Please add your username to .env.local:");
+  console.error("  EMPLOYEE_ID=YourName");
+  console.error("");
+  console.error("Example: EMPLOYEE_ID=Jenny");
   process.exit(1);
 }
 
 if (!/^[a-zA-Z0-9_-]+$/.test(EMPLOYEE_ID)) {
-  console.error("❌ ERROR: Invalid EMPLOYEE_ID format");
-  console.error("EMPLOYEE_ID must contain only letters, numbers, underscores, and dashes");
+  console.error("❌ ERROR: Invalid username format");
+  console.error("Username must contain only letters, numbers, underscores, and dashes");
   process.exit(1);
 }
 
 // Check for ANTHROPIC_API_KEY
 if (!process.env.ANTHROPIC_API_KEY) {
-  console.error("❌ ERROR: ANTHROPIC_API_KEY not set in .env file");
-  console.error("Please add ANTHROPIC_API_KEY=your_key to your .env file");
+  console.error("❌ ERROR: ANTHROPIC_API_KEY not set in .env.local");
+  console.error("Please add ANTHROPIC_API_KEY=your_key to your .env.local file");
   console.error("This is required for response capture feature");
   process.exit(1);
 }

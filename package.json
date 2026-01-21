@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "node server.js",
     "runner": "node runner.js",
-    "build": "cd frontend && npm run build && cd ..",
+    "build": "cd frontend && npm run build && cd .. && bash scripts/create-relayer-package.sh",
     "start": "node scripts/migrate-databases.js && node server.js",
     "relayer": "node relayer-client.js",
     "create-package": "bash scripts/create-relayer-package.sh"
