@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api-client'
 import { Target } from '@/lib/types'
 import { toast } from 'sonner'
-import { Search as SearchIcon, Users, X } from 'lucide-react'
+import { Plus, Search as SearchIcon, Users, X } from 'lucide-react'
 import { ContactsModal } from '@/components/contacts-modal'
 import { EditTargetModal } from '@/components/edit-target-modal'
+import { AddContactToTargetModal } from '@/components/add-contact-to-target-modal'
 
 interface TargetWithMessages extends Target {
   messages_sent?: number
@@ -24,6 +25,8 @@ export default function ApprovedPage() {
   const [contacts, setContacts] = useState<any[]>([])
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [selectedTargetForEdit, setSelectedTargetForEdit] = useState<Target | null>(null)
+  const [addContactModalOpen, setAddContactModalOpen] = useState(false)
+  const [addContactTarget, setAddContactTarget] = useState<{ id: string, name: string } | null>(null)
 
   useEffect(() => {
     loadTargets()
@@ -218,6 +221,19 @@ export default function ApprovedPage() {
                   )}
 
                   <div className="flex gap-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-border/50 hover:bg-primary/10 hover:border-primary"
+                      onClick={() => {
+                        setAddContactTarget({ id: target.id, name: target.team_name })
+                        setAddContactModalOpen(true)
+                      }}
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      Add
+                    </Button>
+
                     {target.x_handle && (
                       <Button
                         size="sm"
@@ -275,6 +291,19 @@ export default function ApprovedPage() {
           onOpenChange={setEditModalOpen}
           target={selectedTargetForEdit}
           onSuccess={loadTargets}
+        />
+      )}
+
+      {addContactTarget && (
+        <AddContactToTargetModal
+          open={addContactModalOpen}
+          onOpenChange={setAddContactModalOpen}
+          targetId={addContactTarget.id}
+          targetName={addContactTarget.name}
+          onSuccess={() => {
+            loadTargets()
+            setAddContactTarget(null)
+          }}
         />
       )}
     </div>
