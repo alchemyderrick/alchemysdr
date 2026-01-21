@@ -60,7 +60,7 @@ async function main() {
     if (result.error.includes('already exists')) {
       console.log('');
       console.log('Admin user already exists. If you need to reset the password,');
-      console.log('delete auth.db in Railway shell and run this script again.');
+      console.log('delete databases/auth.db in Railway shell and run this script again.');
     }
   }
 }
