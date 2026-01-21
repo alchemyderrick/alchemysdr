@@ -1370,6 +1370,173 @@ app.post("/api/targets/import", requireAuth, (req, res) => {
   res.json({ ok: true, inserted, skipped, duplicates, research_queued: researchQueued });
 });
 
+// Research a company from a website URL - uses Apollo + Claude to fill out the company card
+app.post("/api/targets/research-url", requireAuth, async (req, res) => {
+  const { url } = req.body;
+  if (!url || typeof url !== "string") {
+    return res.status(400).json({ error: "url is required" });
+  }
+
+  console.log(`🔍 Researching company from URL: ${url}`);
+
+  try {
+    // Extract domain from URL
+    let domain;
+    let normalizedUrl;
+    try {
+      const parsedUrl = url.startsWith("http") ? new URL(url) : new URL(`https://${url}`);
+      domain = parsedUrl.hostname.replace("www.", "");
+      normalizedUrl = parsedUrl.origin;
+    } catch {
+      return res.status(400).json({ error: "Invalid URL format" });
+    }
+
+    // Check if target with this website already exists
+    const existingByWebsite = req.db.prepare(`SELECT id, team_name FROM targets WHERE website LIKE ? OR website LIKE ?`).get(`%${domain}%`, `%${domain}%`);
+    if (existingByWebsite) {
+      return res.status(400).json({ error: `Team already exists: ${existingByWebsite.team_name}` });
+    }
+
+    let apolloData = null;
+    let twitterHandle = null;
+
+    // Step 1: Try Apollo API for organization enrichment
+    if (apolloClient.isEnabled()) {
+      console.log(`📊 Querying Apollo API for domain: ${domain}`);
+      try {
+        apolloData = await apolloClient.enrichOrganization(null, domain);
+        if (apolloData) {
+          console.log(`✅ Apollo found: ${apolloData.name}`);
+          // Extract Twitter handle from Apollo data
+          if (apolloData.twitter_url) {
+            const twitterMatch = apolloData.twitter_url.match(/(?:twitter\.com|x\.com)\/([^/?]+)/i);
+            if (twitterMatch) {
+              twitterHandle = twitterMatch[1].replace("@", "");
+            }
+          }
+        }
+      } catch (apolloError) {
+        console.log(`⚠️ Apollo API error: ${apolloError.message}`);
+      }
+    }
+
+    // Step 2: Use Claude with web search to research the company
+    console.log(`🤖 Using Claude to research ${domain}...`);
+
+    const researchPrompt = `Research the company at ${url} and provide detailed information about them.
+
+I need you to find:
+1. The official company/project name
+2. Total funding raised (in USD) - look for funding rounds, seed rounds, Series A/B/C, etc.
+3. Monthly revenue (in USD) if available - look for revenue reports, fee revenue, protocol revenue
+4. Whether this is a web3/crypto company (true/false)
+5. Their official Twitter/X handle
+6. A brief description of what they do (1-2 sentences)
+
+${apolloData ? `
+Apollo API already found some data:
+- Company name: ${apolloData.name || "unknown"}
+- Industry: ${apolloData.industry || "unknown"}
+- Employee count: ${apolloData.employee_count || "unknown"}
+- Description: ${apolloData.description || "none"}
+- Twitter URL: ${apolloData.twitter_url || "none"}
+
+Please verify and supplement this data with funding/revenue information.
+` : ""}
+
+Respond in this exact JSON format:
+{
+  "team_name": "Company Name",
+  "raised_usd": 15000000,
+  "monthly_revenue_usd": 600000,
+  "is_web3": true,
+  "x_handle": "twitterhandle",
+  "website": "${normalizedUrl}",
+  "notes": "Brief description of the company"
+}
+
+Important:
+- Use 0 for raised_usd or monthly_revenue_usd if you cannot find reliable data
+- For x_handle, provide just the handle without @ symbol, or null if not found
+- Make sure is_web3 is a boolean (true/false)
+- Keep notes concise (under 200 characters)`;
+
+    const msg = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1000,
+      tools: [{
+        type: "web_search_20250305",
+        name: "web_search"
+      }],
+      messages: [{ role: "user", content: researchPrompt }]
+    });
+
+    // Extract the response text
+    let responseText = "";
+    for (const block of msg.content) {
+      if (block.type === "text") {
+        responseText += block.text;
+      }
+    }
+
+    // Parse the JSON from Claude's response
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error("❌ Failed to extract JSON from Claude response:", responseText);
+      return res.status(500).json({ error: "Failed to parse research results" });
+    }
+
+    let researchResult;
+    try {
+      researchResult = JSON.parse(jsonMatch[0]);
+    } catch {
+      console.error("❌ Invalid JSON in Claude response:", jsonMatch[0]);
+      return res.status(500).json({ error: "Invalid research results format" });
+    }
+
+    // Normalize the result
+    const normalizedResult = {
+      team_name: researchResult.team_name || apolloData?.name || domain,
+      raised_usd: Math.trunc(Number(researchResult.raised_usd) || 0),
+      monthly_revenue_usd: Math.trunc(Number(researchResult.monthly_revenue_usd) || 0),
+      is_web3: (researchResult.is_web3 === true || researchResult.is_web3 === "true") ? 1 : 0,
+      x_handle: researchResult.x_handle || twitterHandle || null,
+      website: researchResult.website || normalizedUrl,
+      notes: stripCiteTags(researchResult.notes) || apolloData?.description || null
+    };
+
+    // Clean up x_handle
+    if (normalizedResult.x_handle) {
+      normalizedResult.x_handle = normalizedResult.x_handle.replace("@", "").trim();
+    }
+
+    // Check for duplicate by team name
+    const existingByName = req.db.prepare(`SELECT id FROM targets WHERE LOWER(TRIM(team_name)) = LOWER(TRIM(?))`).get(normalizedResult.team_name);
+    if (existingByName) {
+      return res.status(400).json({ error: `Team already exists: ${normalizedResult.team_name}` });
+    }
+
+    // Insert into targets table
+    const ts = nowISO();
+    const newId = nanoid();
+    req.db.prepare(`
+      INSERT INTO targets (id, team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website, notes, sources_json, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+    `).run(newId, normalizedResult.team_name, normalizedResult.raised_usd, normalizedResult.monthly_revenue_usd, normalizedResult.is_web3, normalizedResult.x_handle, normalizedResult.website, normalizedResult.notes, null, ts, ts);
+
+    console.log(`✅ Research complete and saved for ${normalizedResult.team_name}`);
+    console.log(`   - Raised: $${normalizedResult.raised_usd.toLocaleString()}`);
+    console.log(`   - Revenue: $${normalizedResult.monthly_revenue_usd.toLocaleString()}/mo`);
+    console.log(`   - Twitter: ${normalizedResult.x_handle || "not found"}`);
+
+    res.json({ ok: true, result: { id: newId, ...normalizedResult } });
+
+  } catch (error) {
+    console.error("❌ Research URL error:", error);
+    res.status(500).json({ error: "Research failed", message: error.message });
+  }
+});
+
 app.post("/api/targets/:id/dismiss", requireAuth, (req, res) => {
   const { id } = req.params;
 

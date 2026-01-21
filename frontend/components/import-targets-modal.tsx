@@ -108,6 +108,8 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess, onStartProgr
     "raised_usd": 15000000,
     "monthly_revenue_usd": 600000,
     "is_web3": true,
+    "x_handle": "exampleprotocol",
+    "website": "https://example.com",
     "notes": "Optional notes about the team"
   }
 ]`}

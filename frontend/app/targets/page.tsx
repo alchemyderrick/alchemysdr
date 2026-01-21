@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { useProgressToast } from '@/hooks/use-progress-toast'
 import { EditTargetModal } from '@/components/edit-target-modal'
 import { ImportTargetsModal } from '@/components/import-targets-modal'
+import { ResearchUrlModal } from '@/components/research-url-modal'
 import { ContactsModal } from '@/components/contacts-modal'
 import { AddContactToTargetModal } from '@/components/add-contact-to-target-modal'
 import { Search, Eye, UserPlus } from 'lucide-react'
@@ -34,6 +35,7 @@ export default function TargetsPage() {
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null)
   const [importModalOpen, setImportModalOpen] = useState(false)
+  const [researchUrlModalOpen, setResearchUrlModalOpen] = useState(false)
   const [contactsModalOpen, setContactsModalOpen] = useState(false)
   const [viewingContacts, setViewingContacts] = useState<{ teamId: string, teamName: string, contacts: Contact[] } | null>(null)
   const [addContactModalOpen, setAddContactModalOpen] = useState(false)
@@ -157,6 +159,9 @@ export default function TargetsPage() {
           <div className="flex gap-2 mt-4">
             <Button onClick={handleResearch} disabled={loading} className="bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">
               🔍 Research
+            </Button>
+            <Button variant="outline" onClick={() => setResearchUrlModalOpen(true)} className="border-border/50 hover:bg-primary/10 hover:border-primary">
+              🔗 Research URL
             </Button>
             <Button variant="outline" onClick={() => setImportModalOpen(true)} className="border-border/50 hover:bg-primary/10 hover:border-primary">
               + Import
@@ -284,6 +289,15 @@ export default function TargetsPage() {
         onOpenChange={setImportModalOpen}
         onSuccess={loadTargets}
         onStartProgress={() => progressToast.start('import')}
+        onCompleteProgress={(msg) => progressToast.complete(msg)}
+        onFailProgress={(err) => progressToast.fail(err)}
+      />
+
+      <ResearchUrlModal
+        open={researchUrlModalOpen}
+        onOpenChange={setResearchUrlModalOpen}
+        onSuccess={loadTargets}
+        onStartProgress={() => progressToast.start('researchUrl')}
         onCompleteProgress={(msg) => progressToast.complete(msg)}
         onFailProgress={(err) => progressToast.fail(err)}
       />

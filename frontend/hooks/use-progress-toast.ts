@@ -62,6 +62,16 @@ export const PROGRESS_CONFIGS = {
       { name: 'Processing contact data...', duration: 20000, targetProgress: 90 },
       { name: 'Finalizing...', duration: 7000, targetProgress: 95 },
     ]
+  },
+  researchUrl: {
+    title: 'Researching Company',
+    icon: '🔗',
+    phases: [
+      { name: 'Fetching website...', duration: 2000, targetProgress: 10 },
+      { name: 'Querying Apollo API...', duration: 8000, targetProgress: 40 },
+      { name: 'Researching with AI...', duration: 15000, targetProgress: 80 },
+      { name: 'Saving team...', duration: 3000, targetProgress: 95 },
+    ]
   }
 } as const
 
