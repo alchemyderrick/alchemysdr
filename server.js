@@ -9,7 +9,7 @@ import { nanoid } from "nanoid";
 import fs from "node:fs";
 import path from "node:path";
 import { WorkflowEngine } from "./lib/workflow-engine.js";
-import { initializeDatabase, getDatabaseForEmployee, closeAllDatabases } from "./lib/database.js";
+import { initializeDatabase, getDatabaseForEmployee, closeAllDatabases, getDatabaseDir } from "./lib/database.js";
 import { createUser, verifyUser, getUserByEmployeeId, getAllUsers, resetUserPassword } from "./lib/auth.js";
 import {
   nowISO,
@@ -75,9 +75,10 @@ app.use(express.urlencoded({ extended: true }));
 
 // Session setup for authentication (BEFORE request logging)
 // Store sessions in databases/ folder for Railway persistent volume support
-const sessionsDbPath = path.join(process.cwd(), 'databases', 'sessions.db');
-if (!fs.existsSync(path.join(process.cwd(), 'databases'))) {
-  fs.mkdirSync(path.join(process.cwd(), 'databases'), { recursive: true });
+const dbDir = getDatabaseDir();
+const sessionsDbPath = path.join(dbDir, 'sessions.db');
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
 }
 const SessionStore = SqliteStore(session);
 app.use(session({
