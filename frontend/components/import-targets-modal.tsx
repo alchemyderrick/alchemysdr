@@ -17,7 +17,6 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const [bypassFilter, setBypassFilter] = useState(false)
-  const [researchMissing, setResearchMissing] = useState(true)
 
   const handleImport = async () => {
     if (!text.trim()) {
@@ -35,17 +34,16 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
         return
       }
 
-      const result = await api.post<{ inserted: number; skipped: number; duplicates?: number; research_queued?: number }>('/api/targets/import', { items, bypass_filter: bypassFilter, research_missing: researchMissing })
+      const result = await api.post<{ inserted: number; skipped: number; duplicates?: number; research_queued?: number }>('/api/targets/import', { items, bypass_filter: bypassFilter })
       const parts = [`Imported ${result.inserted} targets`]
       if (result.duplicates) parts.push(`${result.duplicates} duplicates`)
       if (result.skipped) parts.push(`${result.skipped} skipped`)
       toast.success(parts.join(', '))
       if (result.research_queued && result.research_queued > 0) {
-        toast.info(`Researching Twitter/website for ${result.research_queued} teams in background...`)
+        toast.info(`Researching ${result.research_queued} teams in background (finding contacts, Twitter, website)...`)
       }
       setText('')
       setBypassFilter(false)
-      setResearchMissing(true)
       onOpenChange(false)
       onSuccess()
     } catch {
@@ -73,9 +71,9 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Import Target Teams</DialogTitle>
+          <DialogTitle>Research & Import Target Teams</DialogTitle>
           <DialogDescription>
-            Import teams via JSON. Only teams meeting the filter criteria will be added.
+            Import teams via JSON. Each team will be researched to find contacts, Twitter handles, and websites.
           </DialogDescription>
         </DialogHeader>
 
@@ -98,15 +96,15 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
             <span className="text-sm text-muted-foreground">Bypass filter criteria (import all teams)</span>
           </label>
 
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={researchMissing}
-              onChange={(e) => setResearchMissing(e.target.checked)}
-              className="rounded border-border"
-            />
-            <span className="text-sm text-muted-foreground">Research missing Twitter/website links (runs in background)</span>
-          </label>
+          <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg text-sm">
+            <p className="font-medium text-primary mb-1">Research includes:</p>
+            <ul className="list-disc list-inside text-muted-foreground space-y-1">
+              <li>Finding official Twitter/X handles</li>
+              <li>Finding official website URLs</li>
+              <li>Discovering team contacts (founders, CTOs, engineers)</li>
+              <li>Searching Apollo API + web for employee data</li>
+            </ul>
+          </div>
 
           <div className="p-4 bg-muted/50 rounded-lg text-sm">
             <p className="font-medium mb-2">JSON Format:</p>
@@ -117,8 +115,6 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
     "raised_usd": 15000000,
     "monthly_revenue_usd": 600000,
     "is_web3": true,
-    "x_handle": "example_handle",
-    "website": "https://example.com",
     "notes": "Optional notes about the team"
   }
 ]`}
@@ -154,7 +150,7 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
               Cancel
             </Button>
             <Button onClick={handleImport} disabled={loading || !text.trim()}>
-              {loading ? 'Importing...' : 'Import'}
+              {loading ? 'Importing...' : 'Research & Import'}
             </Button>
           </div>
         </div>
