@@ -8,7 +8,7 @@ import Database from "better-sqlite3";
 
 // Configuration from environment
 const RENDER_URL = process.env.RENDER_URL || "http://localhost:3000";
-const RELAYER_API_KEY = process.env.RELAYER_API_KEY || "";
+const RELAYER_API_KEY = "898d3e3030710bf0284501cfd10c752130170ac6b8e221f5104fb721f2c2a043";
 const EMPLOYEE_ID = process.env.EMPLOYEE_ID;
 const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 10000);
 
