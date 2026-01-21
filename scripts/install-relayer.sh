@@ -74,7 +74,7 @@ else
     echo "  Please install Telegram Desktop:"
     echo "  https://desktop.telegram.org/"
     echo ""
-    read -p "  Press ENTER after installing Telegram Desktop..."
+    read -p "  Press ENTER after installing Telegram Desktop..." < /dev/tty
 fi
 
 # ============================================
@@ -117,19 +117,20 @@ echo ""
 echo "  Get these from your manager:"
 echo ""
 
-read -p "  Your username (EMPLOYEE_ID): " EMPLOYEE_ID
+# Read from /dev/tty to handle piped execution (curl | bash)
+read -p "  Your username (EMPLOYEE_ID): " EMPLOYEE_ID < /dev/tty
 if [[ -z "$EMPLOYEE_ID" ]]; then
     echo -e "${RED}Error: EMPLOYEE_ID is required${NC}"
     exit 1
 fi
 
-read -p "  RELAYER_API_KEY: " RELAYER_API_KEY
+read -p "  RELAYER_API_KEY: " RELAYER_API_KEY < /dev/tty
 if [[ -z "$RELAYER_API_KEY" ]]; then
     echo -e "${RED}Error: RELAYER_API_KEY is required${NC}"
     exit 1
 fi
 
-read -p "  ANTHROPIC_API_KEY: " ANTHROPIC_API_KEY
+read -p "  ANTHROPIC_API_KEY: " ANTHROPIC_API_KEY < /dev/tty
 if [[ -z "$ANTHROPIC_API_KEY" ]]; then
     echo -e "${RED}Error: ANTHROPIC_API_KEY is required${NC}"
     exit 1
@@ -162,13 +163,13 @@ echo "  1. Click the lock icon to unlock"
 echo "  2. Click + and add Terminal (or your terminal app)"
 echo "  3. Make sure the checkbox is enabled"
 echo ""
-read -p "  Press ENTER to open System Settings..."
+read -p "  Press ENTER to open System Settings..." < /dev/tty
 
 # Open System Settings to Accessibility
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
 
 echo ""
-read -p "  Press ENTER after granting permission..."
+read -p "  Press ENTER after granting permission..." < /dev/tty
 
 # ============================================
 # Done!
@@ -189,7 +190,7 @@ echo "  Web UI: $SERVER_URL"
 echo ""
 
 # Ask if they want to start now
-read -p "  Start the relayer now? (Y/n): " START_NOW
+read -p "  Start the relayer now? (Y/n): " START_NOW < /dev/tty
 START_NOW=${START_NOW:-Y}
 
 if [[ "$START_NOW" =~ ^[Yy]$ ]]; then
