@@ -1227,6 +1227,7 @@ Include 15-20 companies. Focus on DeFi protocols (DEXs, lending, derivatives), w
 
 app.post("/api/targets/import", requireAuth, (req, res) => {
   const items = Array.isArray(req.body?.items) ? req.body.items : null;
+  const bypassFilter = req.body?.bypass_filter === true;
   if (!items) return res.status(400).json({ error: "items must be an array" });
   let inserted = 0;
   let skipped = 0;
@@ -1235,8 +1236,8 @@ app.post("/api/targets/import", requireAuth, (req, res) => {
   for (const raw of items) {
     const norm = {
       team_name: raw?.team_name ? String(raw.team_name).trim() : "",
-      raised_usd: Number(raw?.raised_usd),
-      monthly_revenue_usd: Number(raw?.monthly_revenue_usd),
+      raised_usd: Number(raw?.raised_usd) || 0,
+      monthly_revenue_usd: Number(raw?.monthly_revenue_usd) || 0,
       is_web3: (raw?.is_web3 === 1 || raw?.is_web3 === true || raw?.is_web3 === "1" || raw?.is_web3 === "true") ? 1 : 0,
       x_handle: raw?.x_handle ? String(raw.x_handle).replace("@", "").trim() : null,
       website: raw?.website ? String(raw.website).trim() : null,
@@ -1244,7 +1245,7 @@ app.post("/api/targets/import", requireAuth, (req, res) => {
       sources_json: raw?.sources ? JSON.stringify(raw.sources) : (raw?.sources_json || null),
     };
     if (!norm.team_name) { skipped++; continue; }
-    if (!qualifiesTarget(norm)) { skipped++; continue; }
+    if (!bypassFilter && !qualifiesTarget(norm)) { skipped++; continue; }
     try {
       ins.run(nanoid(), norm.team_name, Math.trunc(norm.raised_usd), Math.trunc(norm.monthly_revenue_usd), norm.is_web3, norm.x_handle, norm.website, norm.notes, norm.sources_json, ts, ts);
       inserted++;

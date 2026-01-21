@@ -16,6 +16,7 @@ interface ImportTargetsModalProps {
 export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTargetsModalProps) {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
+  const [bypassFilter, setBypassFilter] = useState(false)
 
   const handleImport = async () => {
     if (!text.trim()) {
@@ -33,9 +34,10 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
         return
       }
 
-      const result = await api.post<{ inserted: number; skipped: number }>('/api/targets/import', { items })
+      const result = await api.post<{ inserted: number; skipped: number }>('/api/targets/import', { items, bypass_filter: bypassFilter })
       toast.success(`Imported ${result.inserted} targets (${result.skipped} skipped)`)
       setText('')
+      setBypassFilter(false)
       onOpenChange(false)
       onSuccess()
     } catch {
@@ -73,11 +75,20 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
           <div className="p-4 bg-muted/50 rounded-lg text-sm space-y-2">
             <p className="font-medium">Filter Criteria:</p>
             <ul className="list-disc list-inside text-muted-foreground space-y-1">
-              <li>Must have <span className="text-foreground font-medium">raised_usd &ge; $10M</span></li>
-              <li>Must have <span className="text-foreground font-medium">monthly_revenue_usd &ge; $500k</span></li>
+              <li><span className="text-foreground font-medium">raised_usd &ge; $10M</span> OR <span className="text-foreground font-medium">monthly_revenue_usd &ge; $500k</span></li>
               <li>Must be <span className="text-foreground font-medium">is_web3: true</span></li>
             </ul>
           </div>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={bypassFilter}
+              onChange={(e) => setBypassFilter(e.target.checked)}
+              className="rounded border-border"
+            />
+            <span className="text-sm text-muted-foreground">Bypass filter criteria (import all teams)</span>
+          </label>
 
           <div className="p-4 bg-muted/50 rounded-lg text-sm">
             <p className="font-medium mb-2">JSON Format:</p>
