@@ -825,6 +825,199 @@ NOT_FOUND - if you see an error or "user not found"`;
   }
 });
 
+// Full research endpoint - finds X handle, website, and contacts for a single target
+app.post("/api/targets/:id/research-full", requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const target = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+  if (!target) return res.status(404).json({ error: "target not found" });
+
+  const result = {
+    id: target.id,
+    team_name: target.team_name,
+    x_handle: target.x_handle,
+    website: target.website,
+    contacts_found: 0,
+    steps_completed: []
+  };
+
+  try {
+    // Step 1: Find X handle if missing
+    if (!target.x_handle) {
+      console.log(`🔍 [${target.team_name}] Finding X handle...`);
+      const searchPrompt = `Find the official X (Twitter) handle for ${target.team_name}. This is a web3/crypto company.
+
+Search for their official X/Twitter account and respond with ONLY the handle (without the @ symbol).
+If you cannot find a verified official account, respond with just the word "none".
+
+Example responses:
+- "ethereum" (for Ethereum Foundation)
+- "uniswap" (for Uniswap)
+- "none" (if not found)`;
+
+      const msg = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 100,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+        messages: [{ role: "user", content: searchPrompt }]
+      });
+
+      let responseText = "";
+      for (const block of msg.content) {
+        if (block.type === "text") responseText += block.text;
+      }
+
+      const handle = responseText.trim().toLowerCase().replace("@", "");
+      if (handle && handle !== "none" && handle.length > 0 && handle.length < 50) {
+        req.db.prepare("UPDATE targets SET x_handle = ?, updated_at = ? WHERE id = ?").run(handle, nowISO(), id);
+        result.x_handle = handle;
+        console.log(`✅ [${target.team_name}] Found X handle: @${handle}`);
+      } else {
+        console.log(`❌ [${target.team_name}] No X handle found`);
+      }
+      result.steps_completed.push('x_handle');
+    } else {
+      result.steps_completed.push('x_handle');
+    }
+
+    // Step 2: Find website if missing
+    if (!target.website) {
+      console.log(`🔍 [${target.team_name}] Finding website...`);
+      const searchPrompt = `Find the official website URL for ${target.team_name}. This is a web3/crypto company.
+
+Search for their official website and respond with ONLY the full URL including https://.
+If you cannot find an official website, respond with just the word "none".
+
+Example responses:
+- "https://uniswap.org" (for Uniswap)
+- "https://aave.com" (for Aave)
+- "none" (if not found)`;
+
+      const msg = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 150,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+        messages: [{ role: "user", content: searchPrompt }]
+      });
+
+      let responseText = "";
+      for (const block of msg.content) {
+        if (block.type === "text") responseText += block.text;
+      }
+
+      const website = responseText.trim().toLowerCase();
+      if (website && website !== "none" && (website.startsWith("http://") || website.startsWith("https://"))) {
+        req.db.prepare("UPDATE targets SET website = ?, updated_at = ? WHERE id = ?").run(website, nowISO(), id);
+        result.website = website;
+        console.log(`✅ [${target.team_name}] Found website: ${website}`);
+      } else {
+        console.log(`❌ [${target.team_name}] No website found`);
+      }
+      result.steps_completed.push('website');
+    } else {
+      result.steps_completed.push('website');
+    }
+
+    // Step 3: Find contacts (team members with X profiles)
+    console.log(`🔍 [${target.team_name}] Finding contacts...`);
+
+    // Refresh target data to get updated x_handle and website
+    const updatedTarget = req.db.prepare("SELECT * FROM targets WHERE id = ?").get(id);
+
+    const contactSearchPrompt = `Search the web to find team members at ${updatedTarget.team_name} who would be relevant for discussing blockchain infrastructure services.
+
+Look for:
+- Founders, Co-founders, CEO
+- CTO, VP Engineering, Head of Engineering
+- Head of Product, Head of Infrastructure
+- Technical decision makers
+
+For EACH person you find, you MUST locate their X/Twitter profile and get their X username (the @handle).
+
+Search strategies:
+1. Search "${updatedTarget.team_name} founder twitter" or "${updatedTarget.team_name} CTO twitter"
+2. Visit the company website ${updatedTarget.website || ''} and look for team pages with social links
+3. Search "${updatedTarget.team_name} team members"
+4. Look at the company's X account ${updatedTarget.x_handle ? '@' + updatedTarget.x_handle : ''} followers/following for team members
+
+For each person, you must find their X username by visiting their X profile.
+
+CRITICAL: Only include people where you have successfully found their X username.
+
+Respond with ONLY valid JSON:
+[
+  {
+    "name": "Full Name",
+    "x_username": "theirusername",
+    "title": "Their role/title",
+    "notes": "Why they're relevant"
+  }
+]
+
+Find 3-5 key team members. If you can't find anyone with X usernames, return: []`;
+
+    const contactMsg = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 4000,
+      system: "You are a research assistant. Always respond with valid JSON only, no additional text.",
+      tools: [{ type: "web_search_20250305", name: "web_search" }],
+      messages: [{ role: "user", content: contactSearchPrompt }]
+    });
+
+    let contactResponseText = "";
+    for (const block of contactMsg.content) {
+      if (block.type === "text") contactResponseText += block.text;
+    }
+
+    let contacts = [];
+    const cleanText = contactResponseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const jsonMatch = cleanText.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      try {
+        contacts = JSON.parse(jsonMatch[0]);
+        console.log(`✅ [${updatedTarget.team_name}] Found ${contacts.length} contacts`);
+      } catch (e) {
+        console.error(`❌ [${updatedTarget.team_name}] Failed to parse contacts:`, e.message);
+      }
+    }
+
+    // Store contacts in discovered_contacts table
+    if (Array.isArray(contacts) && contacts.length > 0) {
+      const insertContact = req.db.prepare(`
+        INSERT OR REPLACE INTO discovered_contacts
+        (id, target_id, name, title, x_username, telegram_handle, notes, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'import_research', ?, ?)
+      `);
+
+      const ts = nowISO();
+      for (const contact of contacts) {
+        if (contact.name && contact.x_username) {
+          const contactId = nanoid();
+          insertContact.run(
+            contactId,
+            id,
+            contact.name,
+            contact.title || null,
+            contact.x_username.replace('@', ''),
+            contact.telegram_handle || null,
+            contact.notes || null,
+            ts,
+            ts
+          );
+        }
+      }
+      result.contacts_found = contacts.length;
+    }
+    result.steps_completed.push('contacts');
+
+    console.log(`✅ [${target.team_name}] Research complete`);
+    res.json({ ok: true, ...result });
+
+  } catch (e) {
+    console.error(`❌ [${target.team_name}] Research error:`, e.message);
+    res.status(500).json({ error: "Research failed", message: e.message, ...result });
+  }
+});
+
 app.post("/api/targets/:id/find-website", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1228,12 +1421,12 @@ Include 15-20 companies. Focus on DeFi protocols (DEXs, lending, derivatives), w
 app.post("/api/targets/import", requireAuth, (req, res) => {
   const items = Array.isArray(req.body?.items) ? req.body.items : null;
   const bypassFilter = req.body?.bypass_filter === true;
-  const researchMissing = req.body?.research_missing === true;
+  const returnIds = req.body?.return_ids === true;
   if (!items) return res.status(400).json({ error: "items must be an array" });
   let inserted = 0;
   let skipped = 0;
   let duplicates = 0;
-  const insertedIds = []; // Track IDs that need research
+  const insertedIds = []; // Track all inserted IDs for research
   const ins = req.db.prepare(`INSERT INTO targets (id, team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website, notes, sources_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?)`);
   const checkDuplicate = req.db.prepare(`SELECT id FROM targets WHERE LOWER(TRIM(team_name)) = LOWER(TRIM(?)) LIMIT 1`);
   const ts = nowISO();
@@ -1257,101 +1450,23 @@ app.post("/api/targets/import", requireAuth, (req, res) => {
       const newId = nanoid();
       ins.run(newId, norm.team_name, Math.trunc(norm.raised_usd), Math.trunc(norm.monthly_revenue_usd), norm.is_web3, norm.x_handle, norm.website, norm.notes, norm.sources_json, ts, ts);
       inserted++;
-      // Track targets missing x_handle or website for research
-      if (researchMissing && (!norm.x_handle || !norm.website)) {
-        insertedIds.push({ id: newId, team_name: norm.team_name, x_handle: norm.x_handle, website: norm.website });
+      // Track all inserted targets for potential research
+      if (returnIds) {
+        insertedIds.push({ id: newId, team_name: norm.team_name });
       }
     } catch (e) {
       skipped++;
     }
   }
 
-  // Kick off async research for targets missing x_handle or website
-  let researchQueued = 0;
-  if (researchMissing && insertedIds.length > 0) {
-    researchQueued = insertedIds.length;
-    console.log(`🔍 Queuing research for ${researchQueued} imported targets...`);
-
-    // Run research asynchronously (don't await)
-    (async () => {
-      for (const target of insertedIds) {
-        try {
-          // Find X handle if missing
-          if (!target.x_handle) {
-            console.log(`🔍 Finding X handle for ${target.team_name}...`);
-            const searchPrompt = `Find the official X (Twitter) handle for ${target.team_name}. This is a web3/crypto company.
-
-Search for their official X/Twitter account and respond with ONLY the handle (without the @ symbol).
-If you cannot find a verified official account, respond with just the word "none".
-
-Example responses:
-- "ethereum" (for Ethereum Foundation)
-- "uniswap" (for Uniswap)
-- "none" (if not found)`;
-
-            const msg = await anthropic.messages.create({
-              model: "claude-sonnet-4-20250514",
-              max_tokens: 100,
-              tools: [{ type: "web_search_20250305", name: "web_search" }],
-              messages: [{ role: "user", content: searchPrompt }]
-            });
-
-            let responseText = "";
-            for (const block of msg.content) {
-              if (block.type === "text") responseText += block.text;
-            }
-
-            const handle = responseText.trim().toLowerCase().replace("@", "");
-            if (handle && handle !== "none" && handle.length > 0 && handle.length < 50) {
-              req.db.prepare("UPDATE targets SET x_handle = ?, updated_at = ? WHERE id = ?").run(handle, nowISO(), target.id);
-              console.log(`✅ Found X handle for ${target.team_name}: @${handle}`);
-            } else {
-              console.log(`❌ No X handle found for ${target.team_name}`);
-            }
-          }
-
-          // Find website if missing
-          if (!target.website) {
-            console.log(`🔍 Finding website for ${target.team_name}...`);
-            const searchPrompt = `Find the official website URL for ${target.team_name}. This is a web3/crypto company.
-
-Search for their official website and respond with ONLY the full URL including https://.
-If you cannot find an official website, respond with just the word "none".
-
-Example responses:
-- "https://uniswap.org" (for Uniswap)
-- "https://aave.com" (for Aave)
-- "none" (if not found)`;
-
-            const msg = await anthropic.messages.create({
-              model: "claude-sonnet-4-20250514",
-              max_tokens: 150,
-              tools: [{ type: "web_search_20250305", name: "web_search" }],
-              messages: [{ role: "user", content: searchPrompt }]
-            });
-
-            let responseText = "";
-            for (const block of msg.content) {
-              if (block.type === "text") responseText += block.text;
-            }
-
-            const website = responseText.trim().toLowerCase();
-            if (website && website !== "none" && (website.startsWith("http://") || website.startsWith("https://"))) {
-              req.db.prepare("UPDATE targets SET website = ?, updated_at = ? WHERE id = ?").run(website, nowISO(), target.id);
-              console.log(`✅ Found website for ${target.team_name}: ${website}`);
-            } else {
-              console.log(`❌ No website found for ${target.team_name}`);
-            }
-          }
-        } catch (e) {
-          console.error(`❌ Research error for ${target.team_name}:`, e.message);
-        }
-      }
-      console.log(`✅ Finished research for ${insertedIds.length} imported targets`);
-    })();
-  }
-
-  res.json({ ok: true, inserted, skipped, duplicates, research_queued: researchQueued });
+  // Return results with optional IDs for frontend-driven research
+  res.json({
+    ok: true,
+    inserted,
+    skipped,
+    duplicates,
+    inserted_ids: returnIds ? insertedIds : undefined
+  });
 });
 
 app.post("/api/targets/:id/dismiss", requireAuth, (req, res) => {

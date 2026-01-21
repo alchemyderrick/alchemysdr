@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api-client'
 import { toast } from 'sonner'
+import { useResearch } from '@/lib/research-context'
 
 interface ImportTargetsModalProps {
   open: boolean
@@ -13,11 +14,28 @@ interface ImportTargetsModalProps {
   onSuccess: () => void
 }
 
+interface ImportResult {
+  inserted: number
+  skipped: number
+  duplicates?: number
+  inserted_ids?: { id: string; team_name: string }[]
+}
+
+interface ResearchResult {
+  ok: boolean
+  id: string
+  team_name: string
+  x_handle?: string | null
+  website?: string | null
+  contacts_found?: number
+  error?: string
+}
+
 export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTargetsModalProps) {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const [bypassFilter, setBypassFilter] = useState(false)
-  const [researchMissing, setResearchMissing] = useState(true)
+  const { startResearch, updateTask } = useResearch()
 
   const handleImport = async () => {
     if (!text.trim()) {
@@ -35,19 +53,59 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
         return
       }
 
-      const result = await api.post<{ inserted: number; skipped: number; duplicates?: number; research_queued?: number }>('/api/targets/import', { items, bypass_filter: bypassFilter, research_missing: researchMissing })
+      // Import targets first
+      const result = await api.post<ImportResult>('/api/targets/import', {
+        items,
+        bypass_filter: bypassFilter,
+        return_ids: true // Request IDs back for research
+      })
+
       const parts = [`Imported ${result.inserted} targets`]
       if (result.duplicates) parts.push(`${result.duplicates} duplicates`)
       if (result.skipped) parts.push(`${result.skipped} skipped`)
       toast.success(parts.join(', '))
-      if (result.research_queued && result.research_queued > 0) {
-        toast.info(`Researching Twitter/website for ${result.research_queued} teams in background...`)
-      }
+
+      // Close modal and reset state
       setText('')
       setBypassFilter(false)
-      setResearchMissing(true)
       onOpenChange(false)
       onSuccess()
+
+      // Start research for all imported targets
+      if (result.inserted_ids && result.inserted_ids.length > 0) {
+        toast.info(`Starting research for ${result.inserted_ids.length} teams...`)
+
+        // Initialize progress tracking
+        startResearch(result.inserted_ids)
+
+        // Research each target sequentially
+        for (const target of result.inserted_ids) {
+          try {
+            // Update status to researching
+            updateTask(target.id, { status: 'researching_x' })
+
+            // Call the full research endpoint
+            const researchResult = await api.post<ResearchResult>(`/api/targets/${target.id}/research-full`, {})
+
+            // Update with results
+            updateTask(target.id, {
+              status: 'completed',
+              x_handle: researchResult.x_handle,
+              website: researchResult.website,
+              contacts_found: researchResult.contacts_found || 0
+            })
+          } catch (e) {
+            console.error(`Research failed for ${target.team_name}:`, e)
+            updateTask(target.id, {
+              status: 'error',
+              error: e instanceof Error ? e.message : 'Research failed'
+            })
+          }
+        }
+
+        // Refresh the targets list after all research is done
+        onSuccess()
+      }
     } catch {
       toast.error('Invalid JSON format. Please check the format and try again.')
     } finally {
@@ -73,9 +131,9 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Import Target Teams</DialogTitle>
+          <DialogTitle>Research & Import Target Teams</DialogTitle>
           <DialogDescription>
-            Import teams via JSON. Only teams meeting the filter criteria will be added.
+            Import teams via JSON. Teams will be researched to find Twitter handles, websites, and contacts.
           </DialogDescription>
         </DialogHeader>
 
@@ -98,15 +156,14 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
             <span className="text-sm text-muted-foreground">Bypass filter criteria (import all teams)</span>
           </label>
 
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={researchMissing}
-              onChange={(e) => setResearchMissing(e.target.checked)}
-              className="rounded border-border"
-            />
-            <span className="text-sm text-muted-foreground">Research missing Twitter/website links (runs in background)</span>
-          </label>
+          <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm">
+            <p className="font-medium text-blue-500 mb-1">Research includes:</p>
+            <ul className="list-disc list-inside text-muted-foreground space-y-1">
+              <li>Finding official Twitter/X handles</li>
+              <li>Finding official website URLs</li>
+              <li>Discovering team contacts (founders, CTOs, etc.)</li>
+            </ul>
+          </div>
 
           <div className="p-4 bg-muted/50 rounded-lg text-sm">
             <p className="font-medium mb-2">JSON Format:</p>
@@ -117,8 +174,6 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
     "raised_usd": 15000000,
     "monthly_revenue_usd": 600000,
     "is_web3": true,
-    "x_handle": "example_handle",
-    "website": "https://example.com",
     "notes": "Optional notes about the team"
   }
 ]`}
@@ -154,7 +209,7 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
               Cancel
             </Button>
             <Button onClick={handleImport} disabled={loading || !text.trim()}>
-              {loading ? 'Importing...' : 'Import'}
+              {loading ? 'Importing...' : 'Research & Import'}
             </Button>
           </div>
         </div>
