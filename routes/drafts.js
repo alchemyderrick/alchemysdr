@@ -1,6 +1,4 @@
 import { Router } from "express";
-import fs from "node:fs";
-import path from "node:path";
 
 /**
  * Draft routes
@@ -25,7 +23,8 @@ export function createDraftRoutes(
 ) {
   const router = Router();
 
-  const SDR_STYLE_FILE = path.join(process.cwd(), "Successful SDR Messaging.txt");
+  // Note: SDR style examples are now hardcoded in lib/helpers.js
+  // We no longer save to file since Railway filesystem is ephemeral
   const AUTO_SEND_ENABLED = String(process.env.AUTO_SEND_ENABLED || "true").toLowerCase() !== "false";
   const AUTO_SEND_IDLE_SECONDS = Number(process.env.AUTO_SEND_IDLE_SECONDS || 5);
 
@@ -221,17 +220,8 @@ export function createDraftRoutes(
         return res.status(404).json({ error: "draft not found" });
       }
 
-      // Save approved message to SDR style file for future learning
-      try {
-        const timestamp = new Date().toISOString().split("T")[0];
-        const finalMessage = message_text && typeof message_text === 'string' ? message_text.trim() : row.message_text;
-        const entry = `\n\n--- Message approved ${timestamp} ---\nContact: ${row.name} at ${row.company}\nMessage:\n${finalMessage}\n---`;
-        fs.appendFileSync(SDR_STYLE_FILE, entry, "utf8");
-        console.log(`✅ Saved approved message to ${SDR_STYLE_FILE}`);
-      } catch (e) {
-        console.error("Failed to save approved message to style file:", e.message);
-        // Don't fail the request if file append fails
-      }
+      // Note: Previously saved to file, now examples are hardcoded
+      console.log(`✅ Message approved for ${row.name} at ${row.company}`);
 
       console.log(`[APPROVE] Success! Returning ok:true`);
       res.json({ ok: true });
@@ -283,18 +273,7 @@ export function createDraftRoutes(
         const info = req.db.prepare(`UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ?`).run(nowISO(), id);
         if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
 
-        // Save to SDR style file
-        try {
-          const textToSave = overrideText || row.message_text;
-          const timestamp = new Date().toISOString().split("T")[0];
-          const entry = `\n\n--- Message approved ${timestamp} (Railway) ---\nContact: ${row.name} at ${row.company}\nMessage:\n${textToSave}\n---`;
-          fs.appendFileSync(SDR_STYLE_FILE, entry, "utf8");
-          console.log(`✅ Saved approved message to ${SDR_STYLE_FILE}`);
-        } catch (e) {
-          console.error("Failed to save message to style file:", e.message);
-        }
-
-        console.log(`✅ Draft ${id} marked as sent (Railway - manual Telegram send required)`);
+        console.log(`✅ Draft ${id} marked as sent (Railway - relayer will send via Telegram)`);
         return res.json({ ok: true, message: "Draft approved! Please manually send via Telegram." });
       }
 
@@ -304,16 +283,7 @@ export function createDraftRoutes(
 
       const textToSend = overrideText ?? row.message_text;
 
-      // Append successful message to SDR style file
-      try {
-        const timestamp = new Date().toISOString().split("T")[0];
-        const entry = `\n\n--- Message sent ${timestamp} ---\nContact: ${row.name} at ${row.company}\nMessage:\n${textToSend}\n---`;
-        fs.appendFileSync(SDR_STYLE_FILE, entry, "utf8");
-        console.log(`✅ Saved successful message to ${SDR_STYLE_FILE}`);
-      } catch (e) {
-        console.error("Failed to save message to style file:", e.message);
-        // Don't fail the request if file append fails
-      }
+      // Note: Previously saved to file, now examples are hardcoded
 
       // Send data to Clay webhook
       try {
@@ -456,15 +426,8 @@ export function createDraftRoutes(
         `INSERT INTO drafts (id, contact_id, channel, message_text, status, prepared_at, created_at, updated_at) VALUES (?, ?, 'telegram', ?, 'followup', ?, ?, ?)`
       ).run(followUpId, contact_id, message_text, IS_MAC ? ts : null, ts, ts);
 
-      // Save to SDR style file
-      try {
-        const timestamp = new Date().toISOString().split("T")[0];
-        const entry = `\n\n--- Follow-up sent ${timestamp} ---\nContact: ${contact_name} at ${company}\nOriginal message:\n${original_message}\n\nFollow-up:\n${message_text}\n---`;
-        fs.appendFileSync(SDR_STYLE_FILE, entry, "utf8");
-        console.log(`✅ Saved follow-up message to ${SDR_STYLE_FILE}`);
-      } catch (e) {
-        console.error("Failed to save follow-up to style file:", e.message);
-      }
+      // Note: Previously saved to file, now examples are hardcoded
+      console.log(`✅ Follow-up created for ${contact_name} at ${company}`);
 
       // Send data to Clay webhook
       try {
