@@ -286,6 +286,58 @@ app.post('/api/auth/logout', (req, res) => {
   });
 });
 
+// Bootstrap endpoint - Create first admin user (only works if no users exist)
+app.post('/api/auth/bootstrap-admin', async (req, res) => {
+  try {
+    // Check if any users exist
+    const users = getAllUsers();
+
+    if (users.length > 0) {
+      return res.status(403).json({
+        error: 'Bootstrap disabled',
+        message: 'Admin user already exists. Use login instead.'
+      });
+    }
+
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ error: 'Password required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        error: 'Weak password',
+        message: 'Password must be at least 6 characters'
+      });
+    }
+
+    // Create admin user: derrick/derrick
+    const result = await createUser('derrick', password, 'derrick', true);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Admin user created successfully',
+        username: 'derrick',
+        employeeId: 'derrick',
+        loginUrl: '/login'
+      });
+    } else {
+      res.status(400).json({
+        error: 'Failed to create admin',
+        message: result.error
+      });
+    }
+  } catch (error) {
+    console.error('[BOOTSTRAP] Error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
 // Healthcheck endpoint - verify frontend is built and served
 app.get('/api/health', (req, res) => {
   const frontendExists = fs.existsSync(path.join(process.cwd(), 'frontend', 'out'));
