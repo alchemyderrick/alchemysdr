@@ -1,4 +1,5 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
 import clipboardy from "clipboardy";
 import open from "open";
 import { exec } from "child_process";
