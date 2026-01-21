@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { WorkflowEngine } from "./lib/workflow-engine.js";
 import { initializeDatabase, getDatabaseForEmployee, closeAllDatabases } from "./lib/database.js";
-import { createUser, verifyUser, getUserByEmployeeId, getAllUsers } from "./lib/auth.js";
+import { createUser, verifyUser, getUserByEmployeeId, getAllUsers, resetUserPassword } from "./lib/auth.js";
 import {
   nowISO,
   tgLinks,
@@ -340,6 +340,34 @@ app.post('/api/auth/bootstrap-admin', async (req, res) => {
       error: 'Internal server error',
       message: error.message
     });
+  }
+});
+
+// Admin password reset endpoint - requires SESSION_SECRET as authorization
+// Usage: curl -X POST https://your-app.railway.app/api/auth/reset-admin -H "Authorization: Bearer YOUR_SESSION_SECRET" -H "Content-Type: application/json" -d '{"password":"newpassword"}'
+app.post('/api/auth/reset-admin', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const sessionSecret = process.env.SESSION_SECRET;
+
+  if (!sessionSecret || sessionSecret === 'change-this-in-production-please') {
+    return res.status(500).json({ error: 'SESSION_SECRET not configured' });
+  }
+
+  if (!authHeader || authHeader !== `Bearer ${sessionSecret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { password } = req.body;
+  if (!password || password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+
+  const result = await resetUserPassword('derrick', password, true);
+
+  if (result.success) {
+    res.json({ success: true, message: 'Admin password reset successfully' });
+  } else {
+    res.status(400).json({ error: result.error });
   }
 });
 
