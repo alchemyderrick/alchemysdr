@@ -21,6 +21,5 @@ interval = 30
 [[volumes]]
 mountPath = "/app/databases"
 
-# Environment variables for Railway
-[env]
-DATABASE_DIR = "/app/databases"
+# NOTE: Set DATABASE_DIR=/app/databases in Railway dashboard Variables tab
+# (railway.toml doesn't support [env] section)
