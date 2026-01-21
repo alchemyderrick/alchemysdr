@@ -96,7 +96,7 @@ export function Sidebar() {
     <aside className="w-56 bg-card border-r flex flex-col py-8 px-4">
       <div className="mb-8 px-4">
         <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
-          SDR Console
+          Derrick Bot (TG)
         </h1>
         {impersonating && (
           <div className="mt-2 px-2 py-1 bg-yellow-500/20 rounded text-xs text-yellow-600 dark:text-yellow-400">
