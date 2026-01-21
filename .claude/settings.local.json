@@ -56,7 +56,15 @@
       "Bash(./start.sh)",
       "Bash(brew install:*)",
       "Bash(railway login:*)",
-      "Bash(./verify-production.sh:*)"
+      "Bash(./verify-production.sh:*)",
+      "Bash(railway whoami:*)",
+      "Bash(railway status:*)",
+      "Bash(railway link:*)",
+      "Bash(railway up:*)",
+      "Bash(./scripts/create-relayer-package.sh:*)",
+      "Bash(tar:*)",
+      "Bash(node --version:*)",
+      "Bash(tail:*)"
     ]
   }
 }

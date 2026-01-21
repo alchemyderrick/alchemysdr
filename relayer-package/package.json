@@ -1,17 +1,39 @@
 {
-  "name": "sdr-relayer-client",
+  "name": "sdr-console",
   "version": "1.0.0",
-  "type": "module",
-  "description": "SDR Console Relayer Client - Telegram automation for employee workstations",
+  "description": "",
+  "main": "index.js",
   "scripts": {
-    "start": "node relayer-client.js"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "node server.js",
+    "runner": "node runner.js",
+    "build": "cd frontend && npm run build && cd ..",
+    "start": "node server.js",
+    "relayer": "node relayer-client.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "engines": {
+    "node": ">=20.9.0"
   },
   "dependencies": {
-    "dotenv": "^17.2.3",
+    "@anthropic-ai/sdk": "^0.71.2",
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^12.5.0",
+    "better-sqlite3-session-store": "^0.1.0",
     "clipboardy": "^5.0.2",
-    "open": "^10.0.3"
-  },
-  "engines": {
-    "node": ">=20.0.0"
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-session": "^1.18.2",
+    "nanoid": "^5.1.6",
+    "node-notifier": "^10.0.1",
+    "open": "^11.0.0",
+    "puppeteer": "^24.34.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
   }
 }
