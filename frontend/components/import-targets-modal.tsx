@@ -142,7 +142,7 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Paste JSON data here or upload a file..."
-            className="min-h-[200px] font-mono text-sm"
+            className="h-[200px] max-h-[200px] font-mono text-sm resize-none overflow-auto"
           />
 
           <div className="flex justify-end gap-2">
