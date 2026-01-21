@@ -283,6 +283,9 @@ export default function TargetsPage() {
         open={importModalOpen}
         onOpenChange={setImportModalOpen}
         onSuccess={loadTargets}
+        onStartProgress={() => progressToast.start('import')}
+        onCompleteProgress={(msg) => progressToast.complete(msg)}
+        onFailProgress={(err) => progressToast.fail(err)}
       />
 
       {viewingContacts && (

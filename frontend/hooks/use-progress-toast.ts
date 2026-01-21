@@ -51,12 +51,16 @@ export const PROGRESS_CONFIGS = {
     ]
   },
   import: {
-    title: 'Importing Teams',
+    title: 'Importing & Researching Teams',
     icon: '📥',
     phases: [
-      { name: 'Validating data...', duration: 2000, targetProgress: 10 },
-      { name: 'Processing teams...', duration: 5000, targetProgress: 50 },
-      { name: 'Starting background research...', duration: 3000, targetProgress: 95 },
+      { name: 'Validating data...', duration: 2000, targetProgress: 5 },
+      { name: 'Importing teams...', duration: 3000, targetProgress: 10 },
+      { name: 'Finding official X handles...', duration: 15000, targetProgress: 25 },
+      { name: 'Discovering websites...', duration: 15000, targetProgress: 40 },
+      { name: 'Searching Apollo for contacts...', duration: 30000, targetProgress: 70 },
+      { name: 'Processing contact data...', duration: 20000, targetProgress: 90 },
+      { name: 'Finalizing...', duration: 7000, targetProgress: 95 },
     ]
   }
 } as const

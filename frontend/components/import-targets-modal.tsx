@@ -11,9 +11,12 @@ interface ImportTargetsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess: () => void
+  onStartProgress?: () => void
+  onCompleteProgress?: (message: string) => void
+  onFailProgress?: (error: string) => void
 }
 
-export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTargetsModalProps) {
+export function ImportTargetsModal({ open, onOpenChange, onSuccess, onStartProgress, onCompleteProgress, onFailProgress }: ImportTargetsModalProps) {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -33,19 +36,29 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
         return
       }
 
+      // Close modal and start progress toast before the API call
+      setText('')
+      onOpenChange(false)
+      onStartProgress?.()
+
       const result = await api.post<{ inserted: number; skipped: number; duplicates?: number; research_queued?: number }>('/api/targets/import', { items, bypass_filter: true })
       const parts = [`Imported ${result.inserted} targets`]
       if (result.duplicates) parts.push(`${result.duplicates} duplicates`)
       if (result.skipped) parts.push(`${result.skipped} skipped`)
-      toast.success(parts.join(', '))
+
       if (result.research_queued && result.research_queued > 0) {
-        toast.info(`Researching ${result.research_queued} teams in background (finding contacts, Twitter, website)...`)
+        // Research is happening - complete progress after estimated time
+        // The server runs research in background, so we simulate progress
+        setTimeout(() => {
+          onCompleteProgress?.(parts.join(', ') + ` - Research complete for ${result.research_queued} teams!`)
+          onSuccess()
+        }, 90000) // ~90 seconds for research to complete
+      } else {
+        onCompleteProgress?.(parts.join(', '))
+        onSuccess()
       }
-      setText('')
-      onOpenChange(false)
-      onSuccess()
     } catch {
-      toast.error('Invalid JSON format. Please check the format and try again.')
+      onFailProgress?.('Invalid JSON format. Please check the format and try again.')
     } finally {
       setLoading(false)
     }
