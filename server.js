@@ -1228,10 +1228,12 @@ Include 15-20 companies. Focus on DeFi protocols (DEXs, lending, derivatives), w
 app.post("/api/targets/import", requireAuth, (req, res) => {
   const items = Array.isArray(req.body?.items) ? req.body.items : null;
   const bypassFilter = req.body?.bypass_filter === true;
+  const researchMissing = req.body?.research_missing === true;
   if (!items) return res.status(400).json({ error: "items must be an array" });
   let inserted = 0;
   let skipped = 0;
   let duplicates = 0;
+  const insertedIds = []; // Track IDs that need research
   const ins = req.db.prepare(`INSERT INTO targets (id, team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website, notes, sources_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?)`);
   const checkDuplicate = req.db.prepare(`SELECT id FROM targets WHERE LOWER(TRIM(team_name)) = LOWER(TRIM(?)) LIMIT 1`);
   const ts = nowISO();
@@ -1252,13 +1254,104 @@ app.post("/api/targets/import", requireAuth, (req, res) => {
     const existing = checkDuplicate.get(norm.team_name);
     if (existing) { duplicates++; continue; }
     try {
-      ins.run(nanoid(), norm.team_name, Math.trunc(norm.raised_usd), Math.trunc(norm.monthly_revenue_usd), norm.is_web3, norm.x_handle, norm.website, norm.notes, norm.sources_json, ts, ts);
+      const newId = nanoid();
+      ins.run(newId, norm.team_name, Math.trunc(norm.raised_usd), Math.trunc(norm.monthly_revenue_usd), norm.is_web3, norm.x_handle, norm.website, norm.notes, norm.sources_json, ts, ts);
       inserted++;
+      // Track targets missing x_handle or website for research
+      if (researchMissing && (!norm.x_handle || !norm.website)) {
+        insertedIds.push({ id: newId, team_name: norm.team_name, x_handle: norm.x_handle, website: norm.website });
+      }
     } catch (e) {
       skipped++;
     }
   }
-  res.json({ ok: true, inserted, skipped, duplicates });
+
+  // Kick off async research for targets missing x_handle or website
+  let researchQueued = 0;
+  if (researchMissing && insertedIds.length > 0) {
+    researchQueued = insertedIds.length;
+    console.log(`🔍 Queuing research for ${researchQueued} imported targets...`);
+
+    // Run research asynchronously (don't await)
+    (async () => {
+      for (const target of insertedIds) {
+        try {
+          // Find X handle if missing
+          if (!target.x_handle) {
+            console.log(`🔍 Finding X handle for ${target.team_name}...`);
+            const searchPrompt = `Find the official X (Twitter) handle for ${target.team_name}. This is a web3/crypto company.
+
+Search for their official X/Twitter account and respond with ONLY the handle (without the @ symbol).
+If you cannot find a verified official account, respond with just the word "none".
+
+Example responses:
+- "ethereum" (for Ethereum Foundation)
+- "uniswap" (for Uniswap)
+- "none" (if not found)`;
+
+            const msg = await anthropic.messages.create({
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 100,
+              tools: [{ type: "web_search_20250305", name: "web_search" }],
+              messages: [{ role: "user", content: searchPrompt }]
+            });
+
+            let responseText = "";
+            for (const block of msg.content) {
+              if (block.type === "text") responseText += block.text;
+            }
+
+            const handle = responseText.trim().toLowerCase().replace("@", "");
+            if (handle && handle !== "none" && handle.length > 0 && handle.length < 50) {
+              req.db.prepare("UPDATE targets SET x_handle = ?, updated_at = ? WHERE id = ?").run(handle, nowISO(), target.id);
+              console.log(`✅ Found X handle for ${target.team_name}: @${handle}`);
+            } else {
+              console.log(`❌ No X handle found for ${target.team_name}`);
+            }
+          }
+
+          // Find website if missing
+          if (!target.website) {
+            console.log(`🔍 Finding website for ${target.team_name}...`);
+            const searchPrompt = `Find the official website URL for ${target.team_name}. This is a web3/crypto company.
+
+Search for their official website and respond with ONLY the full URL including https://.
+If you cannot find an official website, respond with just the word "none".
+
+Example responses:
+- "https://uniswap.org" (for Uniswap)
+- "https://aave.com" (for Aave)
+- "none" (if not found)`;
+
+            const msg = await anthropic.messages.create({
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 150,
+              tools: [{ type: "web_search_20250305", name: "web_search" }],
+              messages: [{ role: "user", content: searchPrompt }]
+            });
+
+            let responseText = "";
+            for (const block of msg.content) {
+              if (block.type === "text") responseText += block.text;
+            }
+
+            const website = responseText.trim().toLowerCase();
+            if (website && website !== "none" && (website.startsWith("http://") || website.startsWith("https://"))) {
+              req.db.prepare("UPDATE targets SET website = ?, updated_at = ? WHERE id = ?").run(website, nowISO(), target.id);
+              console.log(`✅ Found website for ${target.team_name}: ${website}`);
+            } else {
+              console.log(`❌ No website found for ${target.team_name}`);
+            }
+          }
+        } catch (e) {
+          console.error(`❌ Research error for ${target.team_name}:`, e.message);
+        }
+      }
+      console.log(`✅ Finished research for ${insertedIds.length} imported targets`);
+    })();
+  }
+
+  res.json({ ok: true, inserted, skipped, duplicates, research_queued: researchQueued });
 });
 
 app.post("/api/targets/:id/dismiss", requireAuth, (req, res) => {

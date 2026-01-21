@@ -17,6 +17,7 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const [bypassFilter, setBypassFilter] = useState(false)
+  const [researchMissing, setResearchMissing] = useState(true)
 
   const handleImport = async () => {
     if (!text.trim()) {
@@ -34,13 +35,17 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
         return
       }
 
-      const result = await api.post<{ inserted: number; skipped: number; duplicates?: number }>('/api/targets/import', { items, bypass_filter: bypassFilter })
+      const result = await api.post<{ inserted: number; skipped: number; duplicates?: number; research_queued?: number }>('/api/targets/import', { items, bypass_filter: bypassFilter, research_missing: researchMissing })
       const parts = [`Imported ${result.inserted} targets`]
       if (result.duplicates) parts.push(`${result.duplicates} duplicates`)
       if (result.skipped) parts.push(`${result.skipped} skipped`)
       toast.success(parts.join(', '))
+      if (result.research_queued && result.research_queued > 0) {
+        toast.info(`Researching Twitter/website for ${result.research_queued} teams in background...`)
+      }
       setText('')
       setBypassFilter(false)
+      setResearchMissing(true)
       onOpenChange(false)
       onSuccess()
     } catch {
@@ -91,6 +96,16 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
               className="rounded border-border"
             />
             <span className="text-sm text-muted-foreground">Bypass filter criteria (import all teams)</span>
+          </label>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={researchMissing}
+              onChange={(e) => setResearchMissing(e.target.checked)}
+              className="rounded border-border"
+            />
+            <span className="text-sm text-muted-foreground">Research missing Twitter/website links (runs in background)</span>
           </label>
 
           <div className="p-4 bg-muted/50 rounded-lg text-sm">
