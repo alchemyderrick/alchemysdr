@@ -74,10 +74,15 @@ app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
 // Session setup for authentication (BEFORE request logging)
+// Store sessions in databases/ folder for Railway persistent volume support
+const sessionsDbPath = path.join(process.cwd(), 'databases', 'sessions.db');
+if (!fs.existsSync(path.join(process.cwd(), 'databases'))) {
+  fs.mkdirSync(path.join(process.cwd(), 'databases'), { recursive: true });
+}
 const SessionStore = SqliteStore(session);
 app.use(session({
   store: new SessionStore({
-    client: new Database('sessions.db'),
+    client: new Database(sessionsDbPath),
     expired: {
       clear: true,
       intervalMs: 900000 // 15 minutes
