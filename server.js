@@ -402,6 +402,56 @@ app.get('/api/admin/employees/:employeeId/stats', requireAuth, (req, res) => {
   res.json({ employeeId, stats });
 });
 
+// Admin: Create new user or admin
+app.post('/api/admin/create-user', requireAuth, async (req, res) => {
+  if (!req.session.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { username, password, employeeId, isAdmin } = req.body;
+
+  // Validate inputs
+  if (!username || !password || !employeeId) {
+    return res.status(400).json({
+      error: 'Missing required fields',
+      message: 'Username, password, and employee ID are required'
+    });
+  }
+
+  // Validate password strength
+  if (password.length < 6) {
+    return res.status(400).json({
+      error: 'Weak password',
+      message: 'Password must be at least 6 characters long'
+    });
+  }
+
+  try {
+    const result = await createUser(username, password, employeeId, isAdmin || false);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: `${isAdmin ? 'Admin' : 'User'} created successfully`,
+        username,
+        employeeId,
+        isAdmin: isAdmin || false
+      });
+    } else {
+      res.status(400).json({
+        error: 'User creation failed',
+        message: result.error
+      });
+    }
+  } catch (error) {
+    console.error('[API] Error creating user:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
 // Graceful shutdown - close all database connections
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, closing databases...');

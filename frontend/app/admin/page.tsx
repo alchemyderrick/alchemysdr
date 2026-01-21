@@ -11,6 +11,13 @@ interface User {
   last_login: string | null;
 }
 
+interface CreateUserForm {
+  username: string;
+  password: string;
+  employeeId: string;
+  isAdmin: boolean;
+}
+
 interface EmployeeStats {
   targets: { count: number };
   contacts: { count: number };
@@ -25,6 +32,15 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Record<string, EmployeeStats>>({});
   const [loading, setLoading] = useState(true);
   const [impersonating, setImpersonating] = useState<string | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createForm, setCreateForm] = useState<CreateUserForm>({
+    username: '',
+    password: '',
+    employeeId: '',
+    isAdmin: false,
+  });
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -97,6 +113,36 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(null);
+    setCreateSuccess(null);
+
+    try {
+      const response = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(createForm),
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setCreateSuccess(`${createForm.isAdmin ? 'Admin' : 'User'} "${createForm.username}" created successfully!`);
+        setCreateForm({ username: '', password: '', employeeId: '', isAdmin: false });
+        setShowCreateForm(false);
+        // Reload users list
+        loadEmployees();
+      } else {
+        setCreateError(data.message || data.error || 'Failed to create user');
+      }
+    } catch (error) {
+      setCreateError('Network error. Please try again.');
+      console.error('Failed to create user:', error);
+    }
+  };
+
   if (loading) {
     return <div className="p-8 text-gray-900 dark:text-white">Loading...</div>;
   }
@@ -105,15 +151,118 @@ export default function AdminDashboard() {
     <div className="p-8 min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
-        {impersonating && (
+        <div className="flex gap-4 items-center">
+          {impersonating && (
+            <button
+              onClick={handleStopImpersonate}
+              className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+            >
+              Stop Impersonating ({impersonating})
+            </button>
+          )}
           <button
-            onClick={handleStopImpersonate}
-            className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+            onClick={() => setShowCreateForm(!showCreateForm)}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
           >
-            Stop Impersonating ({impersonating})
+            {showCreateForm ? 'Cancel' : '+ Create User'}
           </button>
-        )}
+        </div>
       </div>
+
+      {/* Create User Form */}
+      {showCreateForm && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Create New User</h2>
+
+          {createError && (
+            <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded">
+              {createError}
+            </div>
+          )}
+
+          {createSuccess && (
+            <div className="mb-4 p-3 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">
+              {createSuccess}
+            </div>
+          )}
+
+          <form onSubmit={handleCreateUser} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Username
+              </label>
+              <input
+                type="text"
+                value={createForm.username}
+                onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Password (min 6 characters)
+              </label>
+              <input
+                type="password"
+                value={createForm.password}
+                onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                required
+                minLength={6}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Employee ID
+              </label>
+              <input
+                type="text"
+                value={createForm.employeeId}
+                onChange={(e) => setCreateForm({ ...createForm, employeeId: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                required
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isAdmin"
+                checked={createForm.isAdmin}
+                onChange={(e) => setCreateForm({ ...createForm, isAdmin: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <label htmlFor="isAdmin" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Grant admin privileges
+              </label>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Create {createForm.isAdmin ? 'Admin' : 'User'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateForm(false);
+                  setCreateError(null);
+                  setCreateSuccess(null);
+                  setCreateForm({ username: '', password: '', employeeId: '', isAdmin: false });
+                }}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="grid gap-6">
         {users.map(user => {
