@@ -73,7 +73,10 @@
       "Bash(git revert:*)",
       "Bash(node scripts/migrate-databases.js:*)",
       "Bash(railway run:*)",
-      "Bash(railway variables set:*)"
+      "Bash(railway variables set:*)",
+      "Bash(xargs:*)",
+      "Bash(bash scripts/create-relayer-package.sh:*)",
+      "Bash(railway redeploy:*)"
     ]
   }
 }
