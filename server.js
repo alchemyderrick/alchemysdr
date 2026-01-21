@@ -2034,6 +2034,21 @@ app.use("/api/targets", requireAuth, targetDiscoveryRouter);
     res.status(404).send('Page not found');
   });
 
+  // Auto-create default admin user if no users exist (for ephemeral filesystems)
+  const users = getAllUsers();
+  if (users.length === 0) {
+    const defaultPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123';
+    console.log('🔐 No users found, creating default admin user...');
+    const result = await createUser('derrick', defaultPassword, 'derrick', true);
+    if (result.success) {
+      console.log('✅ Default admin user created (username: derrick)');
+    } else {
+      console.error('❌ Failed to create default admin:', result.error);
+    }
+  } else {
+    console.log(`👥 ${users.length} user(s) found in database`);
+  }
+
   const port = Number(process.env.PORT || 3002);
   app.listen(port, () => {
     console.log(`✅ Console running at http://localhost:${port}`);
