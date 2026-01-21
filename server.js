@@ -1231,7 +1231,9 @@ app.post("/api/targets/import", requireAuth, (req, res) => {
   if (!items) return res.status(400).json({ error: "items must be an array" });
   let inserted = 0;
   let skipped = 0;
-  const ins = req.db.prepare(`INSERT INTO targets (id, team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website, notes, sources_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`);
+  let duplicates = 0;
+  const ins = req.db.prepare(`INSERT INTO targets (id, team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website, notes, sources_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?)`);
+  const checkDuplicate = req.db.prepare(`SELECT id FROM targets WHERE LOWER(TRIM(team_name)) = LOWER(TRIM(?)) LIMIT 1`);
   const ts = nowISO();
   for (const raw of items) {
     const norm = {
@@ -1246,6 +1248,9 @@ app.post("/api/targets/import", requireAuth, (req, res) => {
     };
     if (!norm.team_name) { skipped++; continue; }
     if (!bypassFilter && !qualifiesTarget(norm)) { skipped++; continue; }
+    // Check for duplicate team name
+    const existing = checkDuplicate.get(norm.team_name);
+    if (existing) { duplicates++; continue; }
     try {
       ins.run(nanoid(), norm.team_name, Math.trunc(norm.raised_usd), Math.trunc(norm.monthly_revenue_usd), norm.is_web3, norm.x_handle, norm.website, norm.notes, norm.sources_json, ts, ts);
       inserted++;
@@ -1253,7 +1258,7 @@ app.post("/api/targets/import", requireAuth, (req, res) => {
       skipped++;
     }
   }
-  res.json({ ok: true, inserted, skipped });
+  res.json({ ok: true, inserted, skipped, duplicates });
 });
 
 app.post("/api/targets/:id/dismiss", requireAuth, (req, res) => {

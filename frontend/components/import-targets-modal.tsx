@@ -34,8 +34,11 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
         return
       }
 
-      const result = await api.post<{ inserted: number; skipped: number }>('/api/targets/import', { items, bypass_filter: bypassFilter })
-      toast.success(`Imported ${result.inserted} targets (${result.skipped} skipped)`)
+      const result = await api.post<{ inserted: number; skipped: number; duplicates?: number }>('/api/targets/import', { items, bypass_filter: bypassFilter })
+      const parts = [`Imported ${result.inserted} targets`]
+      if (result.duplicates) parts.push(`${result.duplicates} duplicates`)
+      if (result.skipped) parts.push(`${result.skipped} skipped`)
+      toast.success(parts.join(', '))
       setText('')
       setBypassFilter(false)
       onOpenChange(false)
