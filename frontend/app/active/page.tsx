@@ -46,10 +46,29 @@ export default function ActivePage() {
     setActionLoading(targetId + '-x')
     try {
       toast.info('Discovering X users...')
-      const result = await api.post<{ valid: number }>(`/api/targets/${targetId}/discover-x-users`, { max_users: 5 })
-      toast.success(`Found ${result.valid} valid users! Check the queue.`)
-    } catch (error) {
-      toast.error('Failed to discover X users')
+      const result = await api.post<{ valid: number; message?: string }>(`/api/targets/${targetId}/discover-x-users`, { max_users: 5 })
+
+      if (result.valid === 0) {
+        toast.info(result.message || 'No users found. Try again or check X authentication.')
+      } else {
+        toast.success(`Found ${result.valid} valid users! Check the queue.`)
+      }
+    } catch (error: any) {
+      console.error('X discovery error:', error)
+
+      // Extract error message from API response
+      const errorMessage = error?.response?.message || error?.message || 'Failed to discover X users'
+
+      // Show specific error messages based on error type
+      if (errorMessage.includes('authentication') || errorMessage.includes('cookies')) {
+        toast.error('X authentication required. Please connect your X account in the sidebar.')
+      } else if (errorMessage.includes('rate limit')) {
+        toast.error('X is rate limiting. Please wait a few minutes and try again.')
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('Browser')) {
+        toast.error('Request timed out. Please try again in a moment.')
+      } else {
+        toast.error(errorMessage)
+      }
     } finally {
       setActionLoading(null)
     }

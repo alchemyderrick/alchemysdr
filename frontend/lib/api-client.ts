@@ -4,7 +4,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '' : 'http://localhost:3000')
 
 class APIError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public response?: any) {
     super(message)
     this.name = 'APIError'
   }
@@ -39,8 +39,9 @@ export const api = {
     if (!res.ok) {
       // Try to parse error response body for more details
       let errorMessage = `API error: ${res.statusText}`
+      let errorData = null
       try {
-        const errorData = await res.json()
+        errorData = await res.json()
         if (errorData.error) {
           errorMessage = errorData.error
         }
@@ -50,7 +51,8 @@ export const api = {
       } catch (e) {
         // If parsing fails, use statusText
       }
-      throw new APIError(res.status, errorMessage)
+      const error = new APIError(res.status, errorMessage, errorData)
+      throw error
     }
 
     return res.json()

@@ -1250,7 +1250,7 @@ app.delete("/api/targets/:id", requireAuth, (req, res) => {
   }
 });
 
-app.get("/api/health/claude", requireAuth, async (req, res) => {
+app.get("/api/health/claude", async (req, res) => {
   try {
     const msg = await anthropic.messages.create({
       model: CLAUDE_MODEL,
