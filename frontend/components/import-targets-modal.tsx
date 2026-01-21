@@ -16,7 +16,6 @@ interface ImportTargetsModalProps {
 export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTargetsModalProps) {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
-  const [bypassFilter, setBypassFilter] = useState(false)
 
   const handleImport = async () => {
     if (!text.trim()) {
@@ -34,7 +33,7 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
         return
       }
 
-      const result = await api.post<{ inserted: number; skipped: number; duplicates?: number; research_queued?: number }>('/api/targets/import', { items, bypass_filter: bypassFilter })
+      const result = await api.post<{ inserted: number; skipped: number; duplicates?: number; research_queued?: number }>('/api/targets/import', { items, bypass_filter: true })
       const parts = [`Imported ${result.inserted} targets`]
       if (result.duplicates) parts.push(`${result.duplicates} duplicates`)
       if (result.skipped) parts.push(`${result.skipped} skipped`)
@@ -43,7 +42,6 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
         toast.info(`Researching ${result.research_queued} teams in background (finding contacts, Twitter, website)...`)
       }
       setText('')
-      setBypassFilter(false)
       onOpenChange(false)
       onSuccess()
     } catch {
@@ -78,24 +76,6 @@ export function ImportTargetsModal({ open, onOpenChange, onSuccess }: ImportTarg
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="p-4 bg-muted/50 rounded-lg text-sm space-y-2">
-            <p className="font-medium">Filter Criteria:</p>
-            <ul className="list-disc list-inside text-muted-foreground space-y-1">
-              <li><span className="text-foreground font-medium">raised_usd &ge; $10M</span> OR <span className="text-foreground font-medium">monthly_revenue_usd &ge; $500k</span></li>
-              <li>Must be <span className="text-foreground font-medium">is_web3: true</span></li>
-            </ul>
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={bypassFilter}
-              onChange={(e) => setBypassFilter(e.target.checked)}
-              className="rounded border-border"
-            />
-            <span className="text-sm text-muted-foreground">Bypass filter criteria (import all teams)</span>
-          </label>
-
           <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg text-sm">
             <p className="font-medium text-primary mb-1">Research includes:</p>
             <ul className="list-disc list-inside text-muted-foreground space-y-1">

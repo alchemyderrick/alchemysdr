@@ -64,7 +64,16 @@
       "Bash(./scripts/create-relayer-package.sh:*)",
       "Bash(tar:*)",
       "Bash(node --version:*)",
-      "Bash(tail:*)"
+      "Bash(tail:*)",
+      "Bash(node scripts/create-admin.js:*)",
+      "Bash(~/.zshrc)",
+      "Bash(source ~/.zshrc)",
+      "Bash(brew upgrade:*)",
+      "Bash(node -e:*)",
+      "Bash(git revert:*)",
+      "Bash(node scripts/migrate-databases.js:*)",
+      "Bash(railway run:*)",
+      "Bash(railway variables set:*)"
     ]
   }
 }
