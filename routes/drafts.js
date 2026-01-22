@@ -333,7 +333,7 @@ export function createDraftRoutes(
       }
 
       // LOCAL MAC AUTOMATION BEGINS HERE
-      openTelegramDesktopLink(row.telegram_handle);
+      await openTelegramDesktopLink(row.telegram_handle);
       await new Promise((r) => setTimeout(r, 1000)); // Slightly longer wait for Telegram to fully load
 
       // Split message into paragraphs and send each separately
@@ -484,7 +484,7 @@ export function createDraftRoutes(
       // If on Railway, relayer will handle it
       if (IS_MAC) {
         // Open Telegram
-        openTelegramDesktopLink(telegram_handle);
+        await openTelegramDesktopLink(telegram_handle);
         await new Promise((r) => setTimeout(r, 1000)); // Slightly longer wait for Telegram to fully load
 
         // Split message into paragraphs and send each separately
@@ -609,10 +609,10 @@ export function createDraftRoutes(
       console.log(`📸 Capturing response from Telegram for @${telegram_handle} (direct Mac automation)...`);
 
       // 1. Open Telegram to the contact's chat
-      openTelegramDesktopLink(telegram_handle);
+      await openTelegramDesktopLink(telegram_handle);
 
       // 2. Wait for Telegram to open and load the chat
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 1000));
 
       // 3. Capture screenshot of Telegram window
       console.log("📷 Taking screenshot of Telegram window...");
