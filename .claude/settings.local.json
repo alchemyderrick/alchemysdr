@@ -76,7 +76,11 @@
       "Bash(railway variables set:*)",
       "Bash(xargs:*)",
       "Bash(bash scripts/create-relayer-package.sh:*)",
-      "Bash(railway redeploy:*)"
+      "Bash(railway redeploy:*)",
+      "Bash(for:*)",
+      "Bash(done)",
+      "Bash(gh repo create:*)",
+      "Bash(gh auth status:*)"
     ]
   }
 }
