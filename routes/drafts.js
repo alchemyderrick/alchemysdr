@@ -1,4 +1,6 @@
 import { Router } from "express";
+import fs from "fs";
+import path from "path";
 
 /**
  * Draft routes
@@ -27,6 +29,29 @@ export function createDraftRoutes(
   // We no longer save to file since Railway filesystem is ephemeral
   const AUTO_SEND_ENABLED = String(process.env.AUTO_SEND_ENABLED || "true").toLowerCase() !== "false";
   const AUTO_SEND_IDLE_SECONDS = Number(process.env.AUTO_SEND_IDLE_SECONDS || 5);
+
+  /**
+   * Helper function to append successful messages to Successful SDR Messaging.txt
+   * @param {Object} messageInfo - Information about the message
+   * @param {string} messageInfo.name - Contact name
+   * @param {string} messageInfo.company - Company name
+   * @param {string} messageInfo.message_text - The message that was approved/sent
+   * @param {string} messageInfo.type - Message type: 'initial' or 'followup'
+   */
+  function appendSuccessfulMessage(messageInfo) {
+    try {
+      const logPath = path.join(process.cwd(), 'Successful SDR Messaging.txt');
+      const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      const messageType = messageInfo.type === 'followup' ? '[FOLLOW-UP]' : '[INITIAL]';
+      const logEntry = `\n${messageType} ${timestamp} - ${messageInfo.name} at ${messageInfo.company}\n${messageInfo.message_text}\n${'='.repeat(80)}\n`;
+
+      fs.appendFileSync(logPath, logEntry, 'utf8');
+      console.log(`📝 Appended successful message to Successful SDR Messaging.txt`);
+    } catch (error) {
+      console.error('⚠️ Failed to append to Successful SDR Messaging.txt:', error.message);
+      // Don't throw - we don't want to fail the request if logging fails
+    }
+  }
 
   // Get all drafts with contact information
   router.get("/", (req, res) => {
@@ -219,6 +244,19 @@ export function createDraftRoutes(
         console.error(`[APPROVE] No rows updated for draft: ${id}`);
         return res.status(404).json({ error: "draft not found" });
       }
+
+      // Get the final message text (either the updated one or the original)
+      const finalMessageText = (message_text && typeof message_text === 'string')
+        ? message_text.trim()
+        : row.message_text;
+
+      // Append to successful messaging log
+      appendSuccessfulMessage({
+        name: row.name,
+        company: row.company,
+        message_text: finalMessageText,
+        type: 'initial'
+      });
 
       // Note: Previously saved to file, now examples are hardcoded
       console.log(`✅ Message approved for ${row.name} at ${row.company}`);
@@ -425,6 +463,14 @@ export function createDraftRoutes(
       req.db.prepare(
         `INSERT INTO drafts (id, contact_id, channel, message_text, status, prepared_at, created_at, updated_at) VALUES (?, ?, 'telegram', ?, 'followup', ?, ?, ?)`
       ).run(followUpId, contact_id, message_text, IS_MAC ? ts : null, ts, ts);
+
+      // Append to successful messaging log
+      appendSuccessfulMessage({
+        name: contact_name,
+        company: company,
+        message_text: message_text,
+        type: 'followup'
+      });
 
       // Note: Previously saved to file, now examples are hardcoded
       console.log(`✅ Follow-up created for ${contact_name} at ${company}`);
