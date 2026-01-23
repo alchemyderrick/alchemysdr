@@ -299,31 +299,19 @@ export function createDraftRoutes(
       ).get(id);
       if (!row) return res.status(404).json({ error: "draft not found" });
 
-      // If not on macOS (Railway/Linux), mark as sent (no Telegram automation available)
-      if (process.platform !== "darwin") {
-        // Update message text if provided
-        if (overrideText) {
-          req.db.prepare(`UPDATE drafts SET message_text = ?, updated_at = ? WHERE id = ?`)
-            .run(overrideText.trim(), nowISO(), id);
-        }
-
-        // Mark as sent (Railway has no Telegram automation, but users can manually send)
-        const info = req.db.prepare(`UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ?`).run(nowISO(), id);
-        if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
-
-        console.log(`✅ Draft ${id} marked as sent (Railway - relayer will send via Telegram)`);
-        return res.json({ ok: true, message: "Draft approved! Please manually send via Telegram." });
+      // Update message text if provided
+      if (overrideText) {
+        req.db.prepare(`UPDATE drafts SET message_text = ?, updated_at = ? WHERE id = ?`)
+          .run(overrideText.trim(), nowISO(), id);
       }
 
-      // On macOS: Mark as sent immediately (direct Telegram automation)
+      // Mark as sent
       const info = req.db.prepare(`UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ?`).run(nowISO(), id);
       if (info.changes === 0) return res.status(404).json({ error: "draft not found" });
 
       const textToSend = overrideText ?? row.message_text;
 
-      // Note: Previously saved to file, now examples are hardcoded
-
-      // Send data to Clay webhook
+      // Send data to Clay webhook (ALWAYS, regardless of platform)
       try {
         const target = req.db.prepare("SELECT team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website FROM targets WHERE team_name = ?").get(row.company);
 
@@ -368,6 +356,12 @@ export function createDraftRoutes(
       } catch (e) {
         console.error("Failed to send to Clay webhook:", e.message);
         // Don't fail the request if webhook fails
+      }
+
+      // If not on macOS (Railway/Linux), return early after webhook
+      if (process.platform !== "darwin") {
+        console.log(`✅ Draft ${id} marked as sent (Railway - relayer will send via Telegram)`);
+        return res.json({ ok: true, message: "Draft approved! Webhook sent to Clay." });
       }
 
       // LOCAL MAC AUTOMATION BEGINS HERE
