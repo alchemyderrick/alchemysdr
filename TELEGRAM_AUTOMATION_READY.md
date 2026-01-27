@@ -163,7 +163,7 @@ npm run relayer
 
 ### ✅ Production Ready
 
-- Railway server running at: https://web-production-554d8.up.railway.app
+- Railway server running at: https://sdr-console-production.up.railway.app
 - Multi-employee database structure working
 - Relayer authentication working
 - Telegram automation tested and working
@@ -252,7 +252,7 @@ npm run relayer
 ```
 
 ### Throughout Day
-- Login to web UI: https://web-production-554d8.up.railway.app
+- Login to web UI: https://sdr-console-production.up.railway.app
 - Review and approve drafts
 - Watch relayer automatically send them
 - Check Telegram for responses

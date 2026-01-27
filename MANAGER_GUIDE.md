@@ -54,7 +54,7 @@ Each SDR needs:
 # Or create account via the web UI at /register
 
 # Via API (if you have direct database access):
-curl -X POST https://web-production-554d8.up.railway.app/api/auth/register \
+curl -X POST https://sdr-console-production.up.railway.app/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "username": "sarah",
@@ -64,7 +64,7 @@ curl -X POST https://web-production-554d8.up.railway.app/api/auth/register \
 ```
 
 Or via web UI:
-1. Go to https://web-production-554d8.up.railway.app/register
+1. Go to https://sdr-console-production.up.railway.app/register
 2. Create account with their employee ID as username
 3. Note their credentials
 
@@ -79,7 +79,7 @@ Send the new SDR:
    - It's safe to share within your team
    - Rotate it periodically for security
 
-2. **RENDER_URL**: `https://web-production-554d8.up.railway.app`
+2. **RENDER_URL**: `https://sdr-console-production.up.railway.app`
    - Your Railway deployment URL
 
 3. **EMPLOYEE_ID**: Their username (e.g., "sarah", "john")
@@ -352,7 +352,7 @@ Send them this checklist:
 - [ ] Ran `npm install`
 - [ ] Granted macOS Accessibility permissions to Terminal
 - [ ] Successfully ran `npm run relayer`
-- [ ] Logged into web UI: https://web-production-554d8.up.railway.app
+- [ ] Logged into web UI: https://sdr-console-production.up.railway.app
 - [ ] Sent test message successfully
 
 **Estimated setup time**: 15-30 minutes for technical users

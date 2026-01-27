@@ -52,7 +52,7 @@ npm run relayer
 
 You should see:
 ```
-✅ Connected to server: https://web-production-554d8.up.railway.app
+✅ Connected to server: https://sdr-console-production.up.railway.app
 👤 Employee: your_name
 🔄 Polling every 2000ms for drafts...
 ⏳ Idle - waiting for approved drafts...
@@ -148,7 +148,7 @@ EMPLOYEE_ID=your_name_here
 
 ## Web UI
 
-Login at: **https://web-production-554d8.up.railway.app**
+Login at: **https://sdr-console-production.up.railway.app**
 
 Use your employee username and password.
 

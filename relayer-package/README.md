@@ -51,7 +51,7 @@ npm run relayer
 
 ## Web Interface
 
-https://web-production-554d8.up.railway.app
+https://sdr-console-production.up.railway.app
 
 Login with your username and password (from your manager).
 

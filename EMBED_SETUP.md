@@ -16,7 +16,7 @@ One command to install the Telegram automation on your Mac.
 Open Terminal and paste:
 
 ```bash
-curl -fsSL https://web-production-554d8.up.railway.app/install.sh | bash
+curl -fsSL https://sdr-console-production.up.railway.app/install.sh | bash
 ```
 
 The installer will:
@@ -57,4 +57,4 @@ Keep this running while sending messages.
 
 - Full guide: [SDR_ONBOARDING.md](SDR_ONBOARDING.md)
 - Relayer details: [RELAYER_README.md](RELAYER_README.md)
-- Web UI: https://web-production-554d8.up.railway.app
+- Web UI: https://sdr-console-production.up.railway.app

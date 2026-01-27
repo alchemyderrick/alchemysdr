@@ -26,7 +26,7 @@ This guide walks you through testing the complete Telegram automation flow from 
 
 Open your browser to: http://localhost:3000
 
-Or if testing against Railway: https://web-production-554d8.up.railway.app
+Or if testing against Railway: https://sdr-console-production.up.railway.app
 
 ### Step 2: Login
 
@@ -165,7 +165,7 @@ sqlite3 databases/derrick/data.db "
 ```bash
 curl -H "X-Employee-ID: derrick" \
      -H "X-Relayer-API-Key: 898d3e3030710bf0284501cfd10c752130170ac6b8e221f5104fb721f2c2a043" \
-     https://web-production-554d8.up.railway.app/api/relayer/approved-pending
+     https://sdr-console-production.up.railway.app/api/relayer/approved-pending
 ```
 
 ### Telegram Doesn't Open

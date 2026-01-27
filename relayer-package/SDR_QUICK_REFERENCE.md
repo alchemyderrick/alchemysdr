@@ -22,7 +22,7 @@ npm run relayer
 
 ## Web Interface
 
-**URL**: https://web-production-554d8.up.railway.app
+**URL**: https://sdr-console-production.up.railway.app
 
 **Login**: Your employee username and password
 
@@ -100,7 +100,7 @@ npm run relayer
 
 ### `.env.local` - Your Configuration
 ```bash
-RENDER_URL=https://web-production-554d8.up.railway.app
+RENDER_URL=https://sdr-console-production.up.railway.app
 RELAYER_API_KEY=your-key-here
 EMPLOYEE_ID=your_name_here
 ANTHROPIC_API_KEY=your-key-here
@@ -186,7 +186,7 @@ tail -f relayer.log
 cat .env.local
 
 # Test server connection
-curl https://web-production-554d8.up.railway.app/api/health
+curl https://sdr-console-production.up.railway.app/api/health
 ```
 
 ---

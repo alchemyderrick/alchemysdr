@@ -150,7 +150,7 @@ Confirm: <secure_password>
 ```
 
 ### 3. Verify Deployment
-Visit: https://web-production-554d8.up.railway.app
+Visit: https://sdr-console-production.up.railway.app
 
 #### Authentication Tests
 - [ ] See login page (not home page)

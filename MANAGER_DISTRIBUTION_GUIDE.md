@@ -18,7 +18,7 @@ Each SDR sets up the relayer on **their own Mac** following the self-service gui
 
 ### Option A: Via Web UI (Recommended)
 
-1. Go to: https://web-production-554d8.up.railway.app/register
+1. Go to: https://sdr-console-production.up.railway.app/register
 2. Create account with:
    - **Username**: Their employee ID (e.g., "sarah") - lowercase, no spaces
    - **Password**: A secure temporary password
@@ -27,12 +27,12 @@ Each SDR sets up the relayer on **their own Mac** following the self-service gui
 3. Give them their login credentials:
    - Username: `sarah`
    - Password: `[temporary password]`
-   - URL: https://web-production-554d8.up.railway.app
+   - URL: https://sdr-console-production.up.railway.app
 
 ### Option B: Via API
 
 ```bash
-curl -X POST https://web-production-554d8.up.railway.app/api/auth/register \
+curl -X POST https://sdr-console-production.up.railway.app/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "username": "sarah",
@@ -72,7 +72,7 @@ ATTACHED FILES:
 - relayer-package.tar.gz (the automation software)
 
 YOUR CREDENTIALS:
-- Web UI: https://web-production-554d8.up.railway.app
+- Web UI: https://sdr-console-production.up.railway.app
 - Username: [their_employee_id]
 - Password: [temporary_password]
 - Employee ID: [their_employee_id]
@@ -114,7 +114,7 @@ Let me know if you run into any issues.
    - Used for AI response capture feature
 
 4. **Web UI Login**:
-   - URL: https://web-production-554d8.up.railway.app
+   - URL: https://sdr-console-production.up.railway.app
    - Username: Their employee ID
    - Password: Temporary password (they can change it later)
 
@@ -141,7 +141,7 @@ The SDR follows **SDR_SELF_SETUP.md** (included in the package):
 Have the SDR send you a screenshot showing:
 
 ```
-✅ Connected to server: https://web-production-554d8.up.railway.app
+✅ Connected to server: https://sdr-console-production.up.railway.app
 👤 Employee: their_name
 🔄 Polling every 2000ms for drafts...
 ⏳ Idle - waiting for approved drafts...
@@ -165,7 +165,7 @@ If all works, they're ready! 🎉
 **Fix**:
 1. Verify Railway deployment is running
 2. Check they have correct URL in `.env.local`
-3. Test: `curl https://web-production-554d8.up.railway.app/api/health`
+3. Test: `curl https://sdr-console-production.up.railway.app/api/health`
 
 ### "Invalid API key"
 

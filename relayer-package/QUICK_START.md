@@ -12,7 +12,7 @@ Keep this running while sending messages.
 
 ## 📱 Send a Message
 
-1. Open: https://web-production-554d8.up.railway.app
+1. Open: https://sdr-console-production.up.railway.app
 2. Login as: `derrick`
 3. Go to **Send Queue**
 4. Click **Approve** on a draft

@@ -52,7 +52,7 @@ VERIFY DEPLOYMENT:
 ================================================================================
 
 1. Check Railway logs for startup errors
-2. Test health: curl https://web-production-554d8.up.railway.app/api/health/claude
+2. Test health: curl https://sdr-console-production.up.railway.app/api/health/claude
 3. Start local relayer: npm run relayer
 4. Check relayer connects: Look for "✅ Connected to server" message
 

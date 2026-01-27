@@ -79,7 +79,7 @@ Now fill in these values (get them from your manager):
 
 ```bash
 # 1. Server URL (should already be correct)
-RENDER_URL=https://web-production-554d8.up.railway.app
+RENDER_URL=https://sdr-console-production.up.railway.app
 
 # 2. Relayer API Key (from your manager)
 RELAYER_API_KEY=paste-the-key-here
@@ -127,7 +127,7 @@ You should see:
 ```
 🚀 Starting Relayer Client for Railway...
 ✅ Platform check: macOS detected
-✅ Connected to server: https://web-production-554d8.up.railway.app
+✅ Connected to server: https://sdr-console-production.up.railway.app
 👤 Employee: your_name
 🔄 Polling every 2000ms for drafts...
 ⏳ Idle - waiting for approved drafts...
@@ -142,7 +142,7 @@ You should see:
 ## Step 6: Test It!
 
 1. Open your web browser and go to:
-   **https://web-production-554d8.up.railway.app**
+   **https://sdr-console-production.up.railway.app**
 
 2. Login with your username and password (from your manager)
 
@@ -212,7 +212,7 @@ open -a TextEdit .env.local
 **Fix**:
 1. Check your internet connection
 2. Make sure `RENDER_URL` in `.env.local` is correct
-3. Try opening https://web-production-554d8.up.railway.app in your browser
+3. Try opening https://sdr-console-production.up.railway.app in your browser
 4. If it doesn't load, contact your manager
 
 ### "Invalid API key"
@@ -330,7 +330,7 @@ npm run relayer
 Press **Ctrl+C**
 
 ### Web UI
-https://web-production-554d8.up.railway.app
+https://sdr-console-production.up.railway.app
 
 ### Required Apps Running
 - ✅ Telegram Desktop (logged in)
@@ -353,7 +353,7 @@ Before you finish setup, make sure:
 - [ ] `.env.local` file created and filled in with your credentials
 - [ ] macOS Accessibility permissions granted to Terminal
 - [ ] Relayer starts successfully (`npm run relayer` works)
-- [ ] You can login to https://web-production-554d8.up.railway.app
+- [ ] You can login to https://sdr-console-production.up.railway.app
 - [ ] You successfully sent at least one test message
 
 **All checked?** You're ready to start automating your outreach! 🎉

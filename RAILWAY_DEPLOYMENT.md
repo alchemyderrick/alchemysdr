@@ -111,7 +111,7 @@ node scripts/create-user.js
 
 ### Step 6: Verify Deployment
 
-Visit your Railway URL (e.g., `https://web-production-554d8.up.railway.app`):
+Visit your Railway URL (e.g., `https://sdr-console-production.up.railway.app`):
 - ✅ Should see the **login page** (not home page)
 - ✅ Login with admin credentials
 - ✅ See Admin tab in sidebar

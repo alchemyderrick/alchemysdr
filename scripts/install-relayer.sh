@@ -1,6 +1,6 @@
 #!/bin/bash
 # SDR Relayer One-Click Installer
-# Usage: curl -fsSL https://web-production-554d8.up.railway.app/install.sh | bash
+# Usage: curl -fsSL https://sdr-console-production.up.railway.app/install.sh | bash
 
 set -e
 
@@ -18,7 +18,7 @@ echo -e "${BLUE}========================================${NC}"
 echo ""
 
 # Server URL
-SERVER_URL="https://web-production-554d8.up.railway.app"
+SERVER_URL="https://sdr-console-production.up.railway.app"
 INSTALL_DIR="$HOME/sdr-relayer"
 
 # ============================================

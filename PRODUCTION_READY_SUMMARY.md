@@ -2,7 +2,7 @@
 
 **Status**: ✅ READY FOR PRODUCTION
 
-**Railway URL**: https://web-production-554d8.up.railway.app
+**Railway URL**: https://sdr-console-production.up.railway.app
 
 **Verification Date**: 2026-01-20
 
@@ -114,7 +114,7 @@ npm run relayer
 
 ### Sending Messages
 
-1. **Open web UI**: https://web-production-554d8.up.railway.app
+1. **Open web UI**: https://sdr-console-production.up.railway.app
 2. **Login** with your credentials (username: derrick)
 3. **Navigate to Send Queue** or Drafts
 4. **Create or select a draft** with a valid Telegram handle

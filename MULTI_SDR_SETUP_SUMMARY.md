@@ -218,7 +218,7 @@ sdr-console/
 
 ## What's Already Working
 
-✅ **Railway server**: Running at https://web-production-554d8.up.railway.app
+✅ **Railway server**: Running at https://sdr-console-production.up.railway.app
 ✅ **Multi-employee support**: Database structure supports multiple SDRs
 ✅ **Relayer authentication**: RELAYER_API_KEY + EMPLOYEE_ID authentication works
 ✅ **Telegram automation**: Tested and working on macOS

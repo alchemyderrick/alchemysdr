@@ -17,7 +17,7 @@ export function SetupModal({ open, onOpenChange, employeeId }: SetupModalProps) 
   const [copiedRun, setCopiedRun] = useState(false)
   const [showTroubleshooting, setShowTroubleshooting] = useState(false)
 
-  const serverUrl = typeof window !== 'undefined' ? window.location.origin : 'https://web-production-554d8.up.railway.app'
+  const serverUrl = typeof window !== 'undefined' ? window.location.origin : 'https://sdr-console-production.up.railway.app'
   const installCommand = `curl -fsSL ${serverUrl}/install.sh | bash`
   const runCommand = 'cd ~/sdr-relayer && npm run relayer'
 

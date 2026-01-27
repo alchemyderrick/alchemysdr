@@ -3,7 +3,7 @@
 ## Current Status
 
 ✅ **Relayer is running** (PID: check with `ps aux | grep relayer-client`)
-✅ **Connected to Railway**: https://web-production-554d8.up.railway.app
+✅ **Connected to Railway**: https://sdr-console-production.up.railway.app
 ✅ **Polling every 2 seconds** for approved drafts
 ✅ **Configuration correct**: RELAYER_API_KEY, EMPLOYEE_ID, etc.
 ✅ **Frontend calling correct endpoint**: `/api/drafts/:id/approve`
@@ -55,7 +55,7 @@ You can also test by approving drafts directly via API:
 
 ```bash
 # Get your session cookie from browser, then approve a draft:
-curl -X POST https://web-production-554d8.up.railway.app/api/drafts/DRAFT_ID/approve \
+curl -X POST https://sdr-console-production.up.railway.app/api/drafts/DRAFT_ID/approve \
   -H "Content-Type: application/json" \
   -H "Cookie: connect.sid=YOUR_SESSION_COOKIE"
 ```
@@ -67,7 +67,7 @@ Check that the relayer can connect to Railway:
 ```bash
 curl -H "X-Employee-ID: derrick" \
      -H "X-Relayer-API-Key: 898d3e3030710bf0284501cfd10c752130170ac6b8e221f5104fb721f2c2a043" \
-     https://web-production-554d8.up.railway.app/api/relayer/approved-pending
+     https://sdr-console-production.up.railway.app/api/relayer/approved-pending
 ```
 
 **Expected response**: `{"ok":true,"drafts":[],"count":0}`

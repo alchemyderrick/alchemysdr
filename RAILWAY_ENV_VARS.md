@@ -62,7 +62,7 @@ To verify the relayer can connect, test with:
 ```bash
 curl -H "X-Employee-ID: derrick" \
      -H "X-Relayer-API-Key: 898d3e3030710bf0284501cfd10c752130170ac6b8e221f5104fb721f2c2a043" \
-     https://web-production-554d8.up.railway.app/api/relayer/approved-pending
+     https://sdr-console-production.up.railway.app/api/relayer/approved-pending
 ```
 
 **Expected response**: `{"ok":true,"drafts":[],"count":0}`

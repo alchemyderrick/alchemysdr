@@ -19,7 +19,7 @@ Before you begin, make sure you have:
 - [ ] **macOS computer** (required for Telegram automation)
 - [ ] **Telegram Desktop app** installed and logged in
 - [ ] **Your employee ID** (ask your manager - e.g., "derrick", "sarah", etc.)
-- [ ] **Access to the Railway deployment** (https://web-production-554d8.up.railway.app)
+- [ ] **Access to the Railway deployment** (https://sdr-console-production.up.railway.app)
 
 ---
 
@@ -56,7 +56,7 @@ Create a file called `.env.local` in the project folder:
 
 ```bash
 # Your Railway deployment URL (ask your manager if different)
-RENDER_URL=https://web-production-554d8.up.railway.app
+RENDER_URL=https://sdr-console-production.up.railway.app
 
 # API key for relayer authentication (get from your manager)
 RELAYER_API_KEY=your-shared-relayer-api-key-here
@@ -74,7 +74,7 @@ ANTHROPIC_API_KEY=your-anthropic-api-key-here
 **Example `.env.local` file:**
 
 ```bash
-RENDER_URL=https://web-production-554d8.up.railway.app
+RENDER_URL=https://sdr-console-production.up.railway.app
 RELAYER_API_KEY=898d3e3030710bf0284501cfd10c752130170ac6b8e221f5104fb721f2c2a043
 POLL_INTERVAL_MS=2000
 EMPLOYEE_ID=sarah
@@ -120,7 +120,7 @@ npm run relayer
 ```
 🚀 Starting Relayer Client for Railway...
 ✅ Platform check: macOS detected
-✅ Connected to server: https://web-production-554d8.up.railway.app
+✅ Connected to server: https://sdr-console-production.up.railway.app
 👤 Employee: sarah
 🔄 Polling every 2000ms for drafts...
 ⏳ Idle - waiting for approved drafts...
@@ -144,7 +144,7 @@ npm run relayer
 
 ## Step 5: Login to the Web Interface
 
-1. Open your browser to: **https://web-production-554d8.up.railway.app**
+1. Open your browser to: **https://sdr-console-production.up.railway.app**
 2. Login with your employee username and password
 3. You'll see the main dashboard with:
    - 📋 **Targets** - Companies to prospect
@@ -287,7 +287,7 @@ npm run relayer
 1. Check your internet connection
 2. Verify `RENDER_URL` in `.env.local` is correct
 3. Ask your manager if the Railway server is down
-4. Test the server: `curl https://web-production-554d8.up.railway.app/api/health`
+4. Test the server: `curl https://sdr-console-production.up.railway.app/api/health`
 
 ### Wrong Employee ID
 
@@ -393,7 +393,7 @@ tail -f relayer.log
 ```
 
 ### Web Interface
-https://web-production-554d8.up.railway.app
+https://sdr-console-production.up.railway.app
 
 ### Required Apps
 - ✅ Telegram Desktop (always running)

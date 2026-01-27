@@ -8,7 +8,7 @@ echo "SDR Console - Production Verification"
 echo "========================================================================="
 echo ""
 
-RAILWAY_URL="https://web-production-554d8.up.railway.app"
+RAILWAY_URL="https://sdr-console-production.up.railway.app"
 RELAYER_API_KEY="898d3e3030710bf0284501cfd10c752130170ac6b8e221f5104fb721f2c2a043"
 EMPLOYEE_ID="derrick"
 

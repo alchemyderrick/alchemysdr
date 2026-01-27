@@ -100,7 +100,7 @@ APOLLO_API_KEY=<your-apollo-api-key>
 PORT=3000
 
 # Relayer Configuration (connects to Railway)
-RENDER_URL=https://web-production-554d8.up.railway.app
+RENDER_URL=https://sdr-console-production.up.railway.app
 RELAYER_API_KEY=<your-relayer-api-key>
 POLL_INTERVAL_MS=2000
 EMPLOYEE_ID=derrick
