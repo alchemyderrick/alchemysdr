@@ -727,7 +727,9 @@ app.get("/api/targets", requireAuth, (req, res) => {
         )
         WHERE t1.status = 'active'
       )
-    ORDER BY monthly_revenue_usd DESC, raised_usd DESC
+    ORDER BY
+      CASE WHEN sources_json LIKE '%manual%' THEN 0 ELSE 1 END,
+      created_at DESC
     LIMIT 50
   `).all();
   res.json(rows);
