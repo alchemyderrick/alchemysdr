@@ -8,7 +8,7 @@ import { api } from '@/lib/api-client'
 import { Target } from '@/lib/types'
 import { toast } from 'sonner'
 import { useProgressToast } from '@/hooks/use-progress-toast'
-import { Plus, Search as SearchIcon, Users } from 'lucide-react'
+import { Plus, Search as SearchIcon, Users, Sparkles } from 'lucide-react'
 import { ContactsModal } from '@/components/contacts-modal'
 import { EditTargetModal } from '@/components/edit-target-modal'
 
@@ -225,16 +225,30 @@ export default function ActivePage() {
                       </Button>
                     )}
 
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-border/50 hover:bg-success/10 hover:border-success"
-                      onClick={() => handleSearchAllContacts(target.id, target.team_name)}
-                      disabled={actionLoading === target.id + '-search'}
-                    >
-                      <SearchIcon className="mr-1 h-3 w-3" />
-                      Search
-                    </Button>
+                    {/* Show "Enrich" if missing key data, otherwise "Search" */}
+                    {(!target.website || !target.x_handle || !target.raised_usd || target.raised_usd === 0) ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-border/50 hover:bg-amber/10 hover:border-amber"
+                        onClick={() => handleSearchAllContacts(target.id, target.team_name)}
+                        disabled={actionLoading === target.id + '-search'}
+                      >
+                        <Sparkles className="mr-1 h-3 w-3" />
+                        Enrich
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-border/50 hover:bg-success/10 hover:border-success"
+                        onClick={() => handleSearchAllContacts(target.id, target.team_name)}
+                        disabled={actionLoading === target.id + '-search'}
+                      >
+                        <SearchIcon className="mr-1 h-3 w-3" />
+                        Search
+                      </Button>
+                    )}
 
                     <Button
                       size="sm"
