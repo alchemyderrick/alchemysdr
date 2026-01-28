@@ -105,7 +105,8 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
     try {
       toast.info('Opening Telegram and capturing response...')
       const result = await api.post<{ response: string }>('/api/drafts/capture-response', {
-        telegram_handle: draft.telegram_handle
+        telegram_handle: draft.telegram_handle,
+        original_message: draft.message_text
       })
 
       // Save successful message to shared database (visible to all users)

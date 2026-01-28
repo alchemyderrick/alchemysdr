@@ -649,7 +649,7 @@ export function createDraftRoutes(
   // Capture response from Telegram
   router.post("/capture-response", async (req, res) => {
     try {
-      const { telegram_handle } = req.body;
+      const { telegram_handle, original_message } = req.body;
 
       if (!telegram_handle) {
         return res.status(400).json({ error: "telegram_handle is required" });
@@ -728,7 +728,7 @@ export function createDraftRoutes(
 
       // 4. Extract response using Claude Vision
       console.log("🔍 Extracting response using Claude Vision...");
-      const extractedResponse = await extractResponseFromScreenshot(screenshotPath);
+      const extractedResponse = await extractResponseFromScreenshot(screenshotPath, original_message);
 
       // 5. Check if no response was found
       if (extractedResponse === "NO_RESPONSE" || extractedResponse.toUpperCase().includes("NO_RESPONSE")) {
