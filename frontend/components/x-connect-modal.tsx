@@ -21,7 +21,7 @@ interface UploadResponse {
 }
 
 export function XConnectModal({ open, onOpenChange, sessionId }: XConnectModalProps) {
-  const [cookiesInput, setCookiesInput] = useState('')
+  const [cookiesInput, setCookiesInput] = useState('auth_token=')
   const [uploading, setUploading] = useState(false)
 
   const handleUploadCookies = async () => {
@@ -110,7 +110,7 @@ export function XConnectModal({ open, onOpenChange, sessionId }: XConnectModalPr
             </h3>
             <div className="pl-8 space-y-2">
               <Textarea
-                placeholder="Paste your X cookies here (they look like: auth_token=...; ct0=...; ...)"
+                placeholder="Paste your auth_token value here, then add ct0 and twid"
                 value={cookiesInput}
                 onChange={(e) => setCookiesInput(e.target.value)}
                 className="font-mono text-xs min-h-[120px]"
