@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Home, MessageCircle, Target, CheckCircle, FileText, ShieldCheck, Key, Download } from 'lucide-react'
+import { Home, MessageCircle, Target, CheckCircle, FileText, ShieldCheck, Key, Download, Trophy } from 'lucide-react'
 import { api } from '@/lib/api-client'
 import { toast } from 'sonner'
 import { XConnectModal } from '@/components/x-connect-modal'
@@ -13,6 +13,7 @@ import { SetupModal } from '@/components/setup-modal'
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/followups', label: 'Follow-ups', icon: MessageCircle },
+  { href: '/wins', label: 'W Messages', icon: Trophy },
   { href: '/targets', label: 'Research Teams', icon: Target },
   { href: '/active', label: 'Active Outreach', icon: CheckCircle },
   { href: '/approved', label: 'Target Teams', icon: FileText },

@@ -51,3 +51,15 @@ export interface Stats {
   messagesSent: number
   followUpCount: number
 }
+
+export interface SuccessfulMessage {
+  id: string
+  contact_id: string
+  contact_name: string
+  company: string
+  telegram_handle?: string
+  message_text: string
+  message_type: 'initial' | 'followup'
+  their_response?: string
+  created_at: string
+}
