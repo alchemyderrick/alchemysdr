@@ -86,6 +86,8 @@ export default function ActivePage() {
       } else {
         progressToast.complete(`Found ${result.stored} new contacts for ${teamName}!`)
       }
+      // Reload targets to show updated enrichment data
+      await loadTargets()
     } catch (error) {
       progressToast.fail('Failed to search contacts')
     } finally {
