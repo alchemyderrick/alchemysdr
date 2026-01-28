@@ -1475,7 +1475,7 @@ app.post("/api/targets/research-url", requireAuth, async (req, res) => {
     // Check if target with this website already exists (excluding dismissed)
     const existingByWebsite = req.db.prepare(`SELECT id, team_name, status FROM targets WHERE (website LIKE ? OR website LIKE ?) AND status != 'dismissed'`).get(`%${domain}%`, `%${domain}%`);
     if (existingByWebsite) {
-      const statusMessage = existingByWebsite.status === 'pending' ? 'in Research Teams' :
+      const statusMessage = existingByWebsite.status === 'pending' ? 'in Add Teams' :
                            existingByWebsite.status === 'approved' ? 'in Approved' :
                            'in Active Outreach';
       return res.status(400).json({ error: `Team already exists: ${existingByWebsite.team_name} (${statusMessage})` });
@@ -1594,10 +1594,13 @@ Important:
       normalizedResult.x_handle = normalizedResult.x_handle.replace("@", "").trim();
     }
 
-    // Check for duplicate by team name
-    const existingByName = req.db.prepare(`SELECT id FROM targets WHERE LOWER(TRIM(team_name)) = LOWER(TRIM(?))`).get(normalizedResult.team_name);
+    // Check for duplicate by team name (excluding dismissed)
+    const existingByName = req.db.prepare(`SELECT id, status FROM targets WHERE LOWER(TRIM(team_name)) = LOWER(TRIM(?)) AND status != 'dismissed'`).get(normalizedResult.team_name);
     if (existingByName) {
-      return res.status(400).json({ error: `Team already exists: ${normalizedResult.team_name}` });
+      const statusMessage = existingByName.status === 'pending' ? 'in Add Teams' :
+                           existingByName.status === 'approved' ? 'in Approved' :
+                           'in Active Outreach';
+      return res.status(400).json({ error: `Team already exists: ${normalizedResult.team_name} (${statusMessage})` });
     }
 
     // Insert into targets table
