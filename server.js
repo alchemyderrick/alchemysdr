@@ -1732,18 +1732,44 @@ app.post("/api/drafts/:id/approve", requireAuth, (req, res) => {
   const { id } = req.params;
 
   try {
+    // Get the draft and contact info to check if we need to create a target
+    const draft = req.db.prepare(`
+      SELECT d.*, c.company
+      FROM drafts d
+      JOIN contacts c ON c.id = d.contact_id
+      WHERE d.id = ?
+    `).get(id);
+
+    if (!draft) {
+      return res.status(404).json({ error: "Draft not found" });
+    }
+
+    // If contact has a company, ensure a target exists for it
+    if (draft.company) {
+      const existingTarget = req.db.prepare(`
+        SELECT id FROM targets WHERE team_name = ? COLLATE NOCASE
+      `).get(draft.company);
+
+      if (!existingTarget) {
+        // Create a new approved target for this company
+        const targetId = nanoid();
+        req.db.prepare(`
+          INSERT INTO targets
+          (id, team_name, raised_usd, monthly_revenue_usd, is_web3, status, created_at, updated_at)
+          VALUES (?, ?, 0, 0, 1, 'approved', ?, ?)
+        `).run(targetId, draft.company, nowISO(), nowISO());
+        console.log(`✅ Auto-created target for company: ${draft.company}`);
+      }
+    }
+
     // Update draft to approved status, clear prepared_at so relayer can pick it up
-    const info = req.db.prepare(`
+    req.db.prepare(`
       UPDATE drafts
       SET status = 'approved',
           prepared_at = NULL,
           updated_at = ?
       WHERE id = ?
     `).run(nowISO(), id);
-
-    if (info.changes === 0) {
-      return res.status(404).json({ error: "Draft not found" });
-    }
 
     console.log(`✅ Draft ${id} approved for relayer`);
     res.json({ ok: true, message: "Draft approved, relayer will process it" });
