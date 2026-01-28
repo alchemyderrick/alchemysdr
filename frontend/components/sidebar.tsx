@@ -58,7 +58,7 @@ export function Sidebar() {
   const [showSetupModal, setShowSetupModal] = useState(false)
   const [sessionId, setSessionId] = useState<string>('')
   const [employeeId, setEmployeeId] = useState<string>('')
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['Messaging', 'Teams']))
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   const toggleGroup = (label: string) => {
     setExpandedGroups((prev) => {
