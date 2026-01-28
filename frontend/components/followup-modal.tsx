@@ -133,6 +133,25 @@ export function FollowupModal({ open, onOpenChange, draft, onSuccess, capturedRe
           throw error
         }
       }
+
+      // Save successful message to shared database (visible to all users) if response was captured
+      if (capturedResponse) {
+        try {
+          await api.post('/api/shared/successful-messages', {
+            contact_name: draft.name,
+            company: draft.company,
+            telegram_handle: draft.telegram_handle,
+            message_text: draft.message_text,
+            message_type: draft.status === 'followup' ? 'followup' : 'initial',
+            their_response: capturedResponse
+          })
+          console.log('Saved successful message to shared W Messaging')
+        } catch (saveError) {
+          console.error('Failed to save successful message:', saveError)
+          // Don't block the flow if saving fails
+        }
+      }
+
       onOpenChange(false)
       onSuccess()
     } catch (error) {
