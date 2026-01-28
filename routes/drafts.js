@@ -584,6 +584,50 @@ export function createDraftRoutes(
     res.json({ ok: true });
   });
 
+  // Save a successful message (when user clicks "Responded" and confirms success)
+  router.post("/save-successful", (req, res) => {
+    try {
+      const { contact_id, contact_name, company, telegram_handle, message_text, message_type, their_response } = req.body;
+
+      if (!contact_id || !contact_name || !company || !message_text || !message_type) {
+        return res.status(400).json({
+          error: "contact_id, contact_name, company, message_text, and message_type are required"
+        });
+      }
+
+      const id = nanoid();
+      const ts = nowISO();
+
+      req.db.prepare(`
+        INSERT INTO successful_messages
+        (id, contact_id, contact_name, company, telegram_handle, message_text, message_type, their_response, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, contact_id, contact_name, company, telegram_handle || null, message_text, message_type, their_response || null, ts);
+
+      console.log(`✅ Saved successful message for ${contact_name} at ${company} (type: ${message_type})`);
+
+      res.json({ ok: true, id });
+    } catch (e) {
+      console.error("save-successful error:", e?.message || e);
+      res.status(500).json({ error: "failed to save successful message", message: e?.message });
+    }
+  });
+
+  // Get all successful messages (for reference/export)
+  router.get("/successful", (req, res) => {
+    try {
+      const rows = req.db.prepare(`
+        SELECT * FROM successful_messages
+        ORDER BY created_at DESC
+        LIMIT 100
+      `).all();
+      res.json(rows);
+    } catch (e) {
+      console.error("get successful messages error:", e?.message || e);
+      res.status(500).json({ error: "failed to get successful messages", message: e?.message });
+    }
+  });
+
   // Capture response from Telegram
   router.post("/capture-response", async (req, res) => {
     try {

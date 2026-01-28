@@ -107,6 +107,24 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
       const result = await api.post<{ response: string }>('/api/drafts/capture-response', {
         telegram_handle: draft.telegram_handle
       })
+
+      // Save successful message to database (response captured = successful conversation)
+      try {
+        await api.post('/api/drafts/save-successful', {
+          contact_id: draft.contact_id,
+          contact_name: draft.name,
+          company: draft.company,
+          telegram_handle: draft.telegram_handle,
+          message_text: draft.message_text,
+          message_type: draft.status === 'followup' ? 'followup' : 'initial',
+          their_response: result.response
+        })
+        console.log('Saved successful message to database')
+      } catch (saveError) {
+        console.error('Failed to save successful message:', saveError)
+        // Don't block the flow if saving fails
+      }
+
       setCapturedResponse(result.response)
       setSelectedDraft(draft)
       setFollowupModalOpen(true)

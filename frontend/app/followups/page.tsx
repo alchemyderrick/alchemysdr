@@ -174,6 +174,24 @@ export default function FollowupsPage() {
       const result = await api.post<{ response: string }>('/api/drafts/capture-response', {
         telegram_handle: mostRecent.telegram_handle
       })
+
+      // Save successful message to database (response captured = successful conversation)
+      try {
+        await api.post('/api/drafts/save-successful', {
+          contact_id: mostRecent.contact_id,
+          contact_name: mostRecent.name,
+          company: mostRecent.company,
+          telegram_handle: mostRecent.telegram_handle,
+          message_text: mostRecent.message_text,
+          message_type: mostRecent.status === 'followup' ? 'followup' : 'initial',
+          their_response: result.response
+        })
+        console.log('Saved successful message to database')
+      } catch (saveError) {
+        console.error('Failed to save successful message:', saveError)
+        // Don't block the flow if saving fails
+      }
+
       setCapturedResponse(result.response)
       setSelectedDraft(mostRecent)
       setFollowupModalOpen(true)
