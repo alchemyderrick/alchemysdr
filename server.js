@@ -688,11 +688,10 @@ app.get("/api/targets/approved", requireAuth, (req, res) => {
     LEFT JOIN contacts c ON c.company = t.team_name
     LEFT JOIN drafts d ON d.contact_id = c.id
     WHERE t.status = 'approved'
-      AND t.is_web3 = 1
       AND (
-        t.raised_usd >= 10000000
-        OR t.monthly_revenue_usd >= 83333
+        (t.is_web3 = 1 AND (t.raised_usd >= 10000000 OR t.monthly_revenue_usd >= 83333))
         OR (t.raised_usd = 0 OR t.raised_usd IS NULL)
+        OR t.sources_json LIKE '%manual%'
       )
     GROUP BY t.id
     ORDER BY t.updated_at DESC
@@ -712,8 +711,10 @@ app.get("/api/targets", requireAuth, (req, res) => {
   const rows = req.db.prepare(`
     SELECT * FROM targets
     WHERE status = 'pending'
-      AND is_web3 = 1
-      AND (raised_usd >= 10000000 OR monthly_revenue_usd >= 83333)
+      AND (
+        (is_web3 = 1 AND (raised_usd >= 10000000 OR monthly_revenue_usd >= 83333))
+        OR sources_json LIKE '%manual%'
+      )
       AND id NOT IN (
         SELECT t1.id FROM targets t1
         INNER JOIN targets t2 ON (
@@ -1600,10 +1601,11 @@ Important:
     // Insert into targets table
     const ts = nowISO();
     const newId = nanoid();
+    const sourcesJson = JSON.stringify({ source: 'manual', url: normalizedUrl, researched_at: ts });
     req.db.prepare(`
       INSERT INTO targets (id, team_name, raised_usd, monthly_revenue_usd, is_web3, x_handle, website, notes, sources_json, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-    `).run(newId, normalizedResult.team_name, normalizedResult.raised_usd, normalizedResult.monthly_revenue_usd, normalizedResult.is_web3, normalizedResult.x_handle, normalizedResult.website, normalizedResult.notes, null, ts, ts);
+    `).run(newId, normalizedResult.team_name, normalizedResult.raised_usd, normalizedResult.monthly_revenue_usd, normalizedResult.is_web3, normalizedResult.x_handle, normalizedResult.website, normalizedResult.notes, sourcesJson, ts, ts);
 
     console.log(`✅ Research complete and saved for ${normalizedResult.team_name}`);
     console.log(`   - Raised: $${normalizedResult.raised_usd.toLocaleString()}`);
