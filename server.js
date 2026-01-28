@@ -28,6 +28,7 @@ import {
   generateOutbound,
   generateOutboundWithFeedback,
   generateFollowUp,
+  generateSupportResponse,
   anthropic,
   CLAUDE_MODEL,
 } from "./lib/helpers.js";
@@ -1995,6 +1996,36 @@ app.use("/api/drafts", requireAuth, createDraftRoutes(
   captureTelegramWindow,
   extractResponseFromScreenshot
 ));
+
+// Support Bot endpoint
+app.post("/api/support/generate", requireAuth, async (req, res) => {
+  try {
+    const { support_message, current_response, feedback } = req.body;
+
+    if (!support_message) {
+      return res.status(400).json({ error: "support_message is required" });
+    }
+
+    console.log(`🤖 Generating support response...`);
+    if (feedback) {
+      console.log(`📝 With feedback: "${feedback}"`);
+    }
+
+    const response = await generateSupportResponse(support_message, {
+      feedback,
+      currentResponse: current_response,
+    });
+
+    console.log(`✅ Support response generated (${response.length} chars)`);
+    res.json({ response });
+  } catch (e) {
+    console.error("support generate error:", e?.message || e);
+    res.status(500).json({
+      error: "failed to generate support response",
+      message: e?.message,
+    });
+  }
+});
 
 // Initialize WorkflowEngine
 const workflowEngine = new WorkflowEngine(db, anthropic, generateOutbound, nowISO, nanoid);
