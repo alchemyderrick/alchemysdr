@@ -54,7 +54,7 @@ export interface Stats {
 
 export interface SuccessfulMessage {
   id: string
-  contact_id: string
+  contact_id?: string
   contact_name: string
   company: string
   telegram_handle?: string
@@ -62,4 +62,5 @@ export interface SuccessfulMessage {
   message_type: 'initial' | 'followup'
   their_response?: string
   created_at: string
+  submitted_by?: string // Username of who submitted this win (for shared messages)
 }

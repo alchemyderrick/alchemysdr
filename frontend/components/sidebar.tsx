@@ -13,7 +13,7 @@ import { SetupModal } from '@/components/setup-modal'
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/followups', label: 'Follow-ups', icon: MessageCircle },
-  { href: '/wins', label: 'W Messages', icon: Trophy },
+  { href: '/wins', label: 'W Messaging', icon: Trophy },
   { href: '/targets', label: 'Research Teams', icon: Target },
   { href: '/active', label: 'Active Outreach', icon: CheckCircle },
   { href: '/approved', label: 'Target Teams', icon: FileText },

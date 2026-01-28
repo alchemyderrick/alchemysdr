@@ -175,10 +175,9 @@ export default function FollowupsPage() {
         telegram_handle: mostRecent.telegram_handle
       })
 
-      // Save successful message to database (response captured = successful conversation)
+      // Save successful message to shared database (visible to all users)
       try {
-        await api.post('/api/drafts/save-successful', {
-          contact_id: mostRecent.contact_id,
+        await api.post('/api/shared/successful-messages', {
           contact_name: mostRecent.name,
           company: mostRecent.company,
           telegram_handle: mostRecent.telegram_handle,
@@ -186,7 +185,7 @@ export default function FollowupsPage() {
           message_type: mostRecent.status === 'followup' ? 'followup' : 'initial',
           their_response: result.response
         })
-        console.log('Saved successful message to database')
+        console.log('Saved successful message to shared W Messaging')
       } catch (saveError) {
         console.error('Failed to save successful message:', saveError)
         // Don't block the flow if saving fails

@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { WorkflowEngine } from "./lib/workflow-engine.js";
 import { initializeDatabase, getDatabaseForEmployee, closeAllDatabases, getDatabaseDir } from "./lib/database.js";
-import { createUser, verifyUser, getUserByEmployeeId, getAllUsers, resetUserPassword } from "./lib/auth.js";
+import { createUser, verifyUser, getUserByEmployeeId, getAllUsers, resetUserPassword, getAuthDatabase } from "./lib/auth.js";
 import {
   nowISO,
   tgLinks,
@@ -574,6 +574,84 @@ process.on('SIGTERM', () => {
   console.log('SIGTERM received, closing databases...');
   closeAllDatabases();
   process.exit(0);
+});
+
+// ============================================
+// Shared W Messaging API (Public Database)
+// ============================================
+
+// Get all shared successful messages (requires auth, shows all users' data)
+app.get('/api/shared/successful-messages', requireAuth, (req, res) => {
+  try {
+    const authDb = getAuthDatabase();
+    const rows = authDb.prepare(`
+      SELECT * FROM shared_successful_messages
+      ORDER BY created_at DESC
+      LIMIT 200
+    `).all();
+    res.json(rows);
+  } catch (e) {
+    console.error("get shared successful messages error:", e?.message || e);
+    res.status(500).json({ error: "failed to get shared successful messages", message: e?.message });
+  }
+});
+
+// Save a successful message to the shared database
+app.post('/api/shared/successful-messages', requireAuth, (req, res) => {
+  try {
+    const { contact_name, company, telegram_handle, message_text, message_type, their_response } = req.body;
+
+    if (!contact_name || !company || !message_text || !message_type) {
+      return res.status(400).json({
+        error: "contact_name, company, message_text, and message_type are required"
+      });
+    }
+
+    const authDb = getAuthDatabase();
+    const id = nanoid();
+    const ts = nowISO();
+
+    authDb.prepare(`
+      INSERT INTO shared_successful_messages
+      (id, submitted_by, contact_name, company, telegram_handle, message_text, message_type, their_response, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, req.username, contact_name, company, telegram_handle || null, message_text, message_type, their_response || null, ts);
+
+    console.log(`✅ Saved shared successful message by ${req.username} for ${contact_name} at ${company}`);
+
+    res.json({ ok: true, id });
+  } catch (e) {
+    console.error("save shared successful message error:", e?.message || e);
+    res.status(500).json({ error: "failed to save shared successful message", message: e?.message });
+  }
+});
+
+// Delete a shared successful message (only submitter or admin)
+app.delete('/api/shared/successful-messages/:id', requireAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    const authDb = getAuthDatabase();
+
+    // Check if message exists and who submitted it
+    const message = authDb.prepare(`SELECT submitted_by FROM shared_successful_messages WHERE id = ?`).get(id);
+
+    if (!message) {
+      return res.status(404).json({ error: "message not found" });
+    }
+
+    // Only allow deletion if user is the submitter or an admin
+    if (message.submitted_by !== req.username && !req.isAdmin) {
+      return res.status(403).json({ error: "You can only delete your own messages" });
+    }
+
+    authDb.prepare(`DELETE FROM shared_successful_messages WHERE id = ?`).run(id);
+
+    console.log(`🗑️ Deleted shared successful message ${id} by ${req.username}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("delete shared successful message error:", e?.message || e);
+    res.status(500).json({ error: "failed to delete shared successful message", message: e?.message });
+  }
 });
 
 // ============================================

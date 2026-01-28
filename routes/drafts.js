@@ -628,6 +628,24 @@ export function createDraftRoutes(
     }
   });
 
+  // Delete a successful message
+  router.delete("/successful/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const info = req.db.prepare(`DELETE FROM successful_messages WHERE id = ?`).run(id);
+
+      if (info.changes === 0) {
+        return res.status(404).json({ error: "message not found" });
+      }
+
+      console.log(`🗑️ Deleted successful message ${id}`);
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("delete successful message error:", e?.message || e);
+      res.status(500).json({ error: "failed to delete successful message", message: e?.message });
+    }
+  });
+
   // Capture response from Telegram
   router.post("/capture-response", async (req, res) => {
     try {
