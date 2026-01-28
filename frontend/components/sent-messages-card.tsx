@@ -109,22 +109,6 @@ export function SentMessagesCard({ refreshTrigger }: SentMessagesCardProps) {
         original_message: draft.message_text
       })
 
-      // Save successful message to shared database (visible to all users)
-      try {
-        await api.post('/api/shared/successful-messages', {
-          contact_name: draft.name,
-          company: draft.company,
-          telegram_handle: draft.telegram_handle,
-          message_text: draft.message_text,
-          message_type: draft.status === 'followup' ? 'followup' : 'initial',
-          their_response: result.response
-        })
-        console.log('Saved successful message to shared W Messaging')
-      } catch (saveError) {
-        console.error('Failed to save successful message:', saveError)
-        // Don't block the flow if saving fails
-      }
-
       setCapturedResponse(result.response)
       setSelectedDraft(draft)
       setFollowupModalOpen(true)
