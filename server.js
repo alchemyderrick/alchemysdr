@@ -1474,17 +1474,20 @@ app.post("/api/targets/research-url", requireAuth, async (req, res) => {
 
     // Check if target with this website already exists (excluding dismissed)
     // Use exact domain matching to avoid false positives (e.g., telis.xyz shouldn't match example-telis.xyz)
+    console.log(`[DEBUG] Checking for duplicate website: ${normalizedUrl}`);
     const existingByWebsite = req.db.prepare(`
-      SELECT id, team_name, status FROM targets
+      SELECT id, team_name, status, website FROM targets
       WHERE (website = ? OR website = ? OR website LIKE ? OR website LIKE ?)
       AND status != 'dismissed'
     `).get(normalizedUrl, `${normalizedUrl}/`, `${normalizedUrl}/%`, `${normalizedUrl}?%`);
     if (existingByWebsite) {
+      console.log(`[DEBUG] Found duplicate: ${existingByWebsite.team_name} (${existingByWebsite.status}) - Website: ${existingByWebsite.website}`);
       const statusMessage = existingByWebsite.status === 'pending' ? 'in Add Teams' :
                            existingByWebsite.status === 'approved' ? 'in Approved' :
                            'in Active Outreach';
       return res.status(400).json({ error: `Team already exists: ${existingByWebsite.team_name} (${statusMessage})` });
     }
+    console.log(`[DEBUG] No duplicate website found, continuing...`);
 
     let apolloData = null;
     let twitterHandle = null;
@@ -1600,13 +1603,16 @@ Important:
     }
 
     // Check for duplicate by team name (excluding dismissed)
-    const existingByName = req.db.prepare(`SELECT id, status FROM targets WHERE LOWER(TRIM(team_name)) = LOWER(TRIM(?)) AND status != 'dismissed'`).get(normalizedResult.team_name);
+    console.log(`[DEBUG] Checking for duplicate team name: ${normalizedResult.team_name}`);
+    const existingByName = req.db.prepare(`SELECT id, status, team_name FROM targets WHERE LOWER(TRIM(team_name)) = LOWER(TRIM(?)) AND status != 'dismissed'`).get(normalizedResult.team_name);
     if (existingByName) {
+      console.log(`[DEBUG] Found duplicate team name: ${existingByName.team_name} (${existingByName.status})`);
       const statusMessage = existingByName.status === 'pending' ? 'in Add Teams' :
                            existingByName.status === 'approved' ? 'in Approved' :
                            'in Active Outreach';
       return res.status(400).json({ error: `Team already exists: ${normalizedResult.team_name} (${statusMessage})` });
     }
+    console.log(`[DEBUG] No duplicate team name found, proceeding with insert...`);
 
     // Insert into targets table
     const ts = nowISO();
