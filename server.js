@@ -1473,7 +1473,12 @@ app.post("/api/targets/research-url", requireAuth, async (req, res) => {
     }
 
     // Check if target with this website already exists (excluding dismissed)
-    const existingByWebsite = req.db.prepare(`SELECT id, team_name, status FROM targets WHERE (website LIKE ? OR website LIKE ?) AND status != 'dismissed'`).get(`%${domain}%`, `%${domain}%`);
+    // Use exact domain matching to avoid false positives (e.g., telis.xyz shouldn't match example-telis.xyz)
+    const existingByWebsite = req.db.prepare(`
+      SELECT id, team_name, status FROM targets
+      WHERE (website = ? OR website = ? OR website LIKE ? OR website LIKE ?)
+      AND status != 'dismissed'
+    `).get(normalizedUrl, `${normalizedUrl}/`, `${normalizedUrl}/%`, `${normalizedUrl}?%`);
     if (existingByWebsite) {
       const statusMessage = existingByWebsite.status === 'pending' ? 'in Add Teams' :
                            existingByWebsite.status === 'approved' ? 'in Approved' :
