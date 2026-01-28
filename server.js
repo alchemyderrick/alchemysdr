@@ -1470,8 +1470,8 @@ app.post("/api/targets/research-url", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "Invalid URL format" });
     }
 
-    // Check if target with this website already exists
-    const existingByWebsite = req.db.prepare(`SELECT id, team_name, status FROM targets WHERE (website LIKE ? OR website LIKE ?)`).get(`%${domain}%`, `%${domain}%`);
+    // Check if target with this website already exists (excluding dismissed)
+    const existingByWebsite = req.db.prepare(`SELECT id, team_name, status FROM targets WHERE (website LIKE ? OR website LIKE ?) AND status != 'dismissed'`).get(`%${domain}%`, `%${domain}%`);
     if (existingByWebsite) {
       const statusMessage = existingByWebsite.status === 'pending' ? 'in Research Teams' :
                            existingByWebsite.status === 'approved' ? 'in Approved' :
