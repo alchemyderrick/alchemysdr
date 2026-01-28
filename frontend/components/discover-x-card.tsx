@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api-client'
 import { toast } from 'sonner'
 import { Search, Loader2 } from 'lucide-react'
+import { useProgressToast } from '@/hooks/use-progress-toast'
 
 interface DiscoverXCardProps {
   onDiscoveryComplete?: () => void
@@ -16,6 +17,7 @@ interface DiscoverXCardProps {
 export function DiscoverXCard({ onDiscoveryComplete }: DiscoverXCardProps) {
   const [handle, setHandle] = useState('')
   const [loading, setLoading] = useState(false)
+  const progressToast = useProgressToast()
 
   const handleDiscover = async () => {
     if (!handle) {
@@ -24,6 +26,7 @@ export function DiscoverXCard({ onDiscoveryComplete }: DiscoverXCardProps) {
     }
 
     setLoading(true)
+    progressToast.start('xDiscovery')
     try {
       const result = await api.post<{ valid: number, invalid: number, drafts_generated: number }>('/api/workflow/x-discovery', {
         x_handle: handle.replace('@', ''),
@@ -31,11 +34,11 @@ export function DiscoverXCard({ onDiscoveryComplete }: DiscoverXCardProps) {
       })
 
       if (result.drafts_generated > 0) {
-        toast.success(`Found ${result.valid} users with Telegram! ${result.drafts_generated} draft${result.drafts_generated > 1 ? 's' : ''} added to Send Queue.`)
+        progressToast.complete(`Found ${result.valid} users with Telegram! ${result.drafts_generated} draft${result.drafts_generated > 1 ? 's' : ''} added to Send Queue.`)
       } else if (result.valid > 0) {
-        toast.info(`Found ${result.valid} users but no drafts generated`)
+        progressToast.complete(`Found ${result.valid} users but no drafts generated`)
       } else {
-        toast.info('No users found with company in bio')
+        progressToast.complete('No users found with company in bio')
       }
 
       setHandle('')
@@ -51,13 +54,9 @@ export function DiscoverXCard({ onDiscoveryComplete }: DiscoverXCardProps) {
       const errorMessage = error?.response?.data?.message || error?.message || 'Unknown error occurred'
 
       if (errorMessage.includes('authenticate') || errorMessage.includes('cookies') || errorMessage.includes('auth')) {
-        toast.error('X authentication required', {
-          description: 'Please connect your X account using the sidebar button first'
-        })
+        progressToast.fail('X authentication required. Please connect your X account using the sidebar button first.')
       } else {
-        toast.error('Failed to discover X users', {
-          description: errorMessage
-        })
+        progressToast.fail(errorMessage)
       }
     } finally {
       setLoading(false)
