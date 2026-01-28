@@ -152,7 +152,7 @@ export default function TargetsPage() {
             <div>
               <CardTitle className="text-xl text-foreground">Research Teams</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Web3 teams with ≥ $10M raised OR ≥ $500k monthly revenue
+                Web3 teams with ≥ $10M raised OR ≥ $1M ARR
               </p>
             </div>
           </div>
