@@ -60,6 +60,21 @@ export function Sidebar() {
   const [employeeId, setEmployeeId] = useState<string>('')
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
+  // Auto-expand groups that contain the current page
+  useEffect(() => {
+    const groupsToExpand = new Set<string>()
+
+    navItems.forEach((entry) => {
+      if (isNavGroup(entry) && isGroupActive(entry)) {
+        groupsToExpand.add(entry.label)
+      }
+    })
+
+    if (groupsToExpand.size > 0) {
+      setExpandedGroups(groupsToExpand)
+    }
+  }, [pathname])
+
   const toggleGroup = (label: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev)
