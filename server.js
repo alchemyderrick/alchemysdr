@@ -691,7 +691,7 @@ app.get("/api/targets/approved", requireAuth, (req, res) => {
       AND t.is_web3 = 1
       AND (
         t.raised_usd >= 10000000
-        OR t.monthly_revenue_usd >= 500000
+        OR t.monthly_revenue_usd >= 83333
         OR (t.raised_usd = 0 OR t.raised_usd IS NULL)
       )
     GROUP BY t.id
@@ -713,12 +713,11 @@ app.get("/api/targets", requireAuth, (req, res) => {
     SELECT * FROM targets
     WHERE status = 'pending'
       AND is_web3 = 1
-      AND raised_usd >= 10000000
-      AND monthly_revenue_usd >= 500000
+      AND (raised_usd >= 10000000 OR monthly_revenue_usd >= 83333)
       AND id NOT IN (
         SELECT t1.id FROM targets t1
         INNER JOIN targets t2 ON (
-          t2.status IN ('approved', 'dismissed')
+          t2.status = 'approved'
           AND (
             (t1.x_handle IS NOT NULL AND t1.x_handle = t2.x_handle)
             OR (t1.website IS NOT NULL AND t1.website = t2.website)
@@ -1470,8 +1469,8 @@ app.post("/api/targets/research-url", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "Invalid URL format" });
     }
 
-    // Check if target with this website already exists (excluding dismissed)
-    const existingByWebsite = req.db.prepare(`SELECT id, team_name, status FROM targets WHERE (website LIKE ? OR website LIKE ?) AND status != 'dismissed'`).get(`%${domain}%`, `%${domain}%`);
+    // Check if target with this website already exists
+    const existingByWebsite = req.db.prepare(`SELECT id, team_name, status FROM targets WHERE (website LIKE ? OR website LIKE ?)`).get(`%${domain}%`, `%${domain}%`);
     if (existingByWebsite) {
       const statusMessage = existingByWebsite.status === 'pending' ? 'in Research Teams' :
                            existingByWebsite.status === 'approved' ? 'in Approved' :
@@ -1644,10 +1643,10 @@ app.post("/api/targets/:id/dismiss", requireAuth, (req, res) => {
     // Delete contacts by company name (includes X/Twitter discovery contacts)
     req.db.prepare("DELETE FROM contacts WHERE company = ?").run(target.team_name);
 
-    // Finally dismiss the target (keep it in database but mark as dismissed)
-    req.db.prepare(`UPDATE targets SET status = 'dismissed', updated_at = ? WHERE id = ?`).run(nowISO(), id);
+    // Delete the target completely from the database
+    req.db.prepare("DELETE FROM targets WHERE id = ?").run(id);
 
-    console.log(`🗑️ Dismissed target ${target.team_name} and deleted all associated contacts and drafts`);
+    console.log(`🗑️ Deleted target ${target.team_name} and all associated contacts and drafts`);
     res.json({ ok: true });
   } catch (e) {
     console.error("Dismiss target error:", e);
