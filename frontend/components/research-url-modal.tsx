@@ -35,7 +35,7 @@ export function ResearchUrlModal({ open, onOpenChange, onSuccess, onStartProgres
 
       if (result.ok) {
         onCompleteProgress?.(`Added ${result.result.team_name} to Research Teams`)
-        onSuccess()
+        await onSuccess()
       } else {
         onFailProgress?.('Research failed')
       }
