@@ -14,6 +14,7 @@ export default function SupportBotPage() {
   const [feedback, setFeedback] = useState('')
   const [loading, setLoading] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
+  const [hasGenerated, setHasGenerated] = useState(false)
 
   const handleGenerate = async () => {
     if (!supportMessage.trim()) {
@@ -28,6 +29,7 @@ export default function SupportBotPage() {
         support_message: supportMessage.trim(),
       })
       setGeneratedResponse(result.response)
+      setHasGenerated(true)
       setFeedback('')
       toast.success('Response generated!')
     } catch (error) {
@@ -130,7 +132,7 @@ export default function SupportBotPage() {
         </Card>
 
         {/* Response Section */}
-        {generatedResponse && (
+        {hasGenerated && (
           <Card className="border border-primary/30 bg-primary/5">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
