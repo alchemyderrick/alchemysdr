@@ -1476,12 +1476,22 @@ app.post("/api/targets/research-url", requireAuth, async (req, res) => {
     // Use exact domain matching to avoid false positives (e.g., telis.xyz shouldn't match example-telis.xyz)
     console.log(`[DEBUG] Checking for duplicate website: ${normalizedUrl}`);
     const existingByWebsite = req.db.prepare(`
-      SELECT id, team_name, status, website FROM targets
+      SELECT id, team_name, status, website, sources_json FROM targets
       WHERE (website = ? OR website = ? OR website LIKE ? OR website LIKE ?)
       AND status != 'dismissed'
     `).get(normalizedUrl, `${normalizedUrl}/`, `${normalizedUrl}/%`, `${normalizedUrl}?%`);
     if (existingByWebsite) {
       console.log(`[DEBUG] Found duplicate: ${existingByWebsite.team_name} (${existingByWebsite.status}) - Website: ${existingByWebsite.website}`);
+
+      // If it's pending and doesn't have manual source, update it to add manual source
+      if (existingByWebsite.status === 'pending' && (!existingByWebsite.sources_json || !existingByWebsite.sources_json.includes('manual'))) {
+        console.log(`[DEBUG] Updating existing pending target to add manual source flag`);
+        const ts = nowISO();
+        const sourcesJson = JSON.stringify({ source: 'manual', url: normalizedUrl, researched_at: ts });
+        req.db.prepare(`UPDATE targets SET sources_json = ?, updated_at = ? WHERE id = ?`).run(sourcesJson, ts, existingByWebsite.id);
+        return res.json({ ok: true, result: { id: existingByWebsite.id, team_name: existingByWebsite.team_name, updated: true } });
+      }
+
       const statusMessage = existingByWebsite.status === 'pending' ? 'in Add Teams' :
                            existingByWebsite.status === 'approved' ? 'in Approved' :
                            'in Active Outreach';
