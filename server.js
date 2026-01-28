@@ -2358,9 +2358,26 @@ app.use("/api/targets", requireAuth, targetDiscoveryRouter);
     // Exclude installer files which have their own routes
     if (req.method === 'GET' && !req.path.startsWith('/api') &&
         !req.path.endsWith('.sh') && !req.path.endsWith('.tar.gz')) {
-      const nextIndexPath = path.join(process.cwd(), 'frontend', 'out', 'index.html');
-      if (fs.existsSync(nextIndexPath)) {
-        return res.sendFile(nextIndexPath);
+      const outDir = path.join(process.cwd(), 'frontend', 'out');
+
+      // Try to find the specific HTML file for this route
+      // Next.js static export creates targets.html, active.html, etc.
+      let htmlPath = null;
+
+      // Remove leading/trailing slashes and get the route name
+      const routeName = req.path.replace(/^\/|\/$/g, '') || 'index';
+      const specificHtml = path.join(outDir, `${routeName}.html`);
+
+      // Check if specific route HTML exists
+      if (fs.existsSync(specificHtml)) {
+        htmlPath = specificHtml;
+      } else {
+        // Fall back to index.html for unknown routes (SPA fallback)
+        htmlPath = path.join(outDir, 'index.html');
+      }
+
+      if (fs.existsSync(htmlPath)) {
+        return res.sendFile(htmlPath);
       }
     }
     res.status(404).send('Page not found');
